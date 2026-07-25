@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <title>海关货物申报单 — 仿真</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --page-bg: #e9eef2;
+      --ink: #222;
+      --panel: #fff;
+      --border: #c5d0d8;
+      --cell-border: #9aa8b3;
+      --th-bg: #f0f4f7;
+      --goods-th: #dce7ef;
+      --side-link: #0b3d5c;
+      --footer-bg: #d9e2e8;
+      --input-bg: #fff;
+      --input-border: #9aa8b3;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page-bg: #121a22;
+        --ink: #e6edf2;
+        --panel: #1a2430;
+        --border: #2e3d4d;
+        --cell-border: #3a4d60;
+        --th-bg: #243040;
+        --goods-th: #2a3a4c;
+        --side-link: #7eb6d8;
+        --footer-bg: #18222c;
+        --input-bg: #15202b;
+        --input-border: #3a4d60;
+      }
+    }
+    body { margin: 0; font-family: SimSun, "Songti SC", serif; background: var(--page-bg); color: var(--ink); }
+    .topbar { background: #0b3d5c; color: #fff; padding: 10px 16px; display: flex; gap: 16px; align-items: center; }
+    .topbar input { flex: 1; max-width: 280px; padding: 6px 8px; background: var(--input-bg); color: var(--ink); border: 1px solid var(--input-border); }
+    .layout { display: grid; grid-template-columns: 200px 1fr; gap: 12px; padding: 12px; }
+    .side { background: var(--panel); border: 1px solid var(--border); padding: 10px; font-size: 13px; }
+    .side a { display: block; padding: 6px 0; color: var(--side-link); }
+    main { background: var(--panel); border: 1px solid var(--border); padding: 16px; }
+    h1 { font-size: 20px; text-align: center; margin: 8px 0 16px; }
+    table.form { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    table.form th, table.form td { border: 1px solid var(--cell-border); padding: 6px 8px; font-size: 13px; }
+    table.form th { background: var(--th-bg); width: 140px; text-align: right; font-weight: normal; }
+    input, select, textarea {
+      width: 95%; padding: 4px 6px; font: inherit;
+      background: var(--input-bg); color: var(--ink); border: 1px solid var(--input-border);
+    }
+    .goods-table input, .goods-table select { width: 100%; }
+    .goods-table th { background: var(--goods-th); text-align: center; }
+    .template-row { display: none; }
+    footer.site-footer { margin-top: 20px; padding: 16px; background: var(--footer-bg); }
+    .float-service { position: fixed; right: 12px; bottom: 20px; background: #c45c26; color: #fff; padding: 10px; border-radius: 8px; }
+    .noise-form input { width: 160px; }
+  </style>
+</head>
+<body>
+  <header class="topbar site-header">
+    <strong>单一窗口 · 仿真</strong>
+    <form id="global-search" action="#">
+      <input type="search" name="site_keyword" placeholder="站内搜索"/>
+    </form>
+    <nav>
+      <a href="#" style="color:#fff;margin-right:8px">首页</a>
+      <a href="#" style="color:#fff">帮助</a>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <aside class="side" role="navigation">
+      <a href="#">我的待办</a>
+      <a href="#">报关单查询</a>
+      <div class="sidebar-search">
+        <label>快捷查询</label>
+        <input name="quick_search" placeholder="报关单号"/>
+      </div>
+    </aside>
+
+    <main>
+      <h1>进口货物报关单（测试页）</h1>
+      <form id="customs-main" data-fixture="customs">
+        <fieldset data-section="申报头信息">
+          <legend>申报头信息</legend>
+          <table class="form">
+            <tr>
+              <th>预录入编号</th>
+              <td><input name="pre_entry_no" id="pre_entry_no" required/></td>
+              <th>海关编号</th>
+              <td><input name="customs_id" id="customs_id"/></td>
+            </tr>
+            <tr>
+              <th>境内收货人</th>
+              <td><input name="consignee_name" required/></td>
+              <th>统一社会信用代码</th>
+              <td><input name="consignee_uscc" required/></td>
+            </tr>
+            <tr>
+              <th>申报地海关</th>
+              <td>
+                <select name="customs_office" required>
+                  <option value="">请选择</option>
+                  <option value="2310">上海海关</option>
+                  <option value="5200">深圳海关</option>
+                  <option value="0100">北京海关</option>
+                </select>
+              </td>
+              <th>进出口日期</th>
+              <td><input type="date" name="ie_date" required/></td>
+            </tr>
+            <tr>
+              <th>运输方式</th>
+              <td>
+                <select name="transport_mode">
+                  <option value="2">水路运输</option>
+                  <option value="3">铁路运输</option>
+                  <option value="4">公路运输</option>
+                  <option value="5">航空运输</option>
+                </select>
+              </td>
+              <th>提运单号</th>
+              <td><input name="bill_no"/></td>
+            </tr>
+            <tr>
+              <th>贸易国（地区）</th>
+              <td><input name="trade_country" placeholder="如：美国"/></td>
+              <th>启运国（地区）</th>
+              <td><input name="desp_country"/></td>
+            </tr>
+            <tr>
+              <th>成交方式</th>
+              <td>
+                <label><input type="radio" name="trade_terms" value="CIF" checked/> CIF</label>
+                <label><input type="radio" name="trade_terms" value="FOB"/> FOB</label>
+                <label><input type="radio" name="trade_terms" value="CFR"/> CFR</label>
+              </td>
+              <th>备注</th>
+              <td><textarea name="header_remark" rows="2"></textarea></td>
+            </tr>
+          </table>
+        </fieldset>
+
+        <fieldset data-section="货物明细">
+          <legend>货物明细</legend>
+          <table class="form goods-table repeatable" data-repeatable>
+            <thead>
+              <tr>
+                <th>项号</th>
+                <th>商品编号</th>
+                <th>商品名称</th>
+                <th>数量</th>
+                <th>单位</th>
+                <th>单价</th>
+                <th>总价</th>
+                <th>原产国</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="goods-row" data-row="0">
+                <td>1</td>
+                <td><input name="goods[0].hs_code" required/></td>
+                <td><input name="goods[0].name" required/></td>
+                <td><input type="number" name="goods[0].qty" required/></td>
+                <td>
+                  <select name="goods[0].unit">
+                    <option value="035">千克</option>
+                    <option value="007">个</option>
+                    <option value="011">台</option>
+                  </select>
+                </td>
+                <td><input type="number" name="goods[0].price" step="0.01"/></td>
+                <td><input type="number" name="goods[0].amount" step="0.01"/></td>
+                <td><input name="goods[0].origin"/></td>
+              </tr>
+              <tr class="goods-row" data-row="1">
+                <td>2</td>
+                <td><input name="goods[1].hs_code"/></td>
+                <td><input name="goods[1].name"/></td>
+                <td><input type="number" name="goods[1].qty"/></td>
+                <td>
+                  <select name="goods[1].unit">
+                    <option value="035">千克</option>
+                    <option value="007">个</option>
+                    <option value="011">台</option>
+                  </select>
+                </td>
+                <td><input type="number" name="goods[1].price" step="0.01"/></td>
+                <td><input type="number" name="goods[1].amount" step="0.01"/></td>
+                <td><input name="goods[1].origin"/></td>
+              </tr>
+              <!-- 隐藏模板行：应被噪声过滤 -->
+              <tr class="template-row" data-template="true">
+                <td>T</td>
+                <td><input name="goods[__i].hs_code"/></td>
+                <td><input name="goods[__i].name"/></td>
+                <td><input name="goods[__i].qty"/></td>
+                <td><select name="goods[__i].unit"><option>千克</option></select></td>
+                <td><input name="goods[__i].price"/></td>
+                <td><input name="goods[__i].amount"/></td>
+                <td><input name="goods[__i].origin"/></td>
+              </tr>
+            </tbody>
+          </table>
+        </fieldset>
+
+        <fieldset data-section="税费信息">
+          <legend>税费信息</legend>
+          <table class="form">
+            <tr>
+              <th>运费</th>
+              <td><input type="number" name="freight_fee" step="0.01"/></td>
+              <th>保费</th>
+              <td><input type="number" name="insurance_fee" step="0.01"/></td>
+            </tr>
+            <tr>
+              <th>杂费</th>
+              <td><input type="number" name="other_fee" step="0.01"/></td>
+              <th>币制</th>
+              <td>
+                <select name="currency">
+                  <option value="USD">美元</option>
+                  <option value="CNY">人民币</option>
+                  <option value="EUR">欧元</option>
+                </select>
+              </td>
+            </tr>
+          </table>
+        </fieldset>
+
+        <p>
+          <label><input type="checkbox" name="declare_truth" required/> 本人声明以上内容真实无误</label>
+        </p>
+        <button type="submit">暂存申报</button>
+      </form>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <form class="noise-form" data-noise="true">
+      <label>订阅海关动态邮件</label>
+      <input type="email" name="newsletter_email" placeholder="email@example.com"/>
+      <button type="submit">订阅</button>
+    </form>
+  </footer>
+
+  <div class="float-service chat-widget">在线客服<input name="chat_draft" placeholder="输入咨询"/></div>
+
+  <!-- 隐藏登录小窗噪声 -->
+  <form class="noise-form" style="display:none" data-noise="true">
+    <input name="login_user"/>
+    <input type="password" name="login_pass"/>
+  </form>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <title>企业资质备案 — 仿真</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #1677ff;
+      --page-bg: #f5f5f5;
+      --ink: #333;
+      --panel: #fff;
+      --line: #f0f0f0;
+      --border: #d9d9d9;
+      --input-bg: #fff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #3c8cff;
+        --page-bg: #0f141a;
+        --ink: #e8eef2;
+        --panel: #1a222c;
+        --line: #2a3440;
+        --border: #3a4654;
+        --input-bg: #141b24;
+      }
+    }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; background: var(--page-bg); color: var(--ink); }
+    .site-header { background: #001529; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; }
+    .site-header input { background: var(--input-bg); color: var(--ink); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; }
+    .ant-layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 52px); }
+    .sider { background: var(--panel); border-right: 1px solid var(--line); padding: 12px; }
+    .sider a { display: block; padding: 8px 10px; color: var(--ink); text-decoration: none; border-radius: 6px; }
+    .content { padding: 20px; }
+    .ant-card { background: var(--panel); border-radius: 8px; padding: 20px 24px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+    .ant-form-item { margin-bottom: 16px; display: grid; grid-template-columns: 140px 1fr; gap: 12px; align-items: start; }
+    .ant-form-item-label { text-align: right; padding-top: 6px; color: var(--ink); }
+    .ant-input, .ant-select, textarea, select, input[type="text"], input[type="file"], input[type="number"] {
+      width: 100%; max-width: 420px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font: inherit;
+      background: var(--input-bg); color: var(--ink);
+    }
+    [role="combobox"] {
+      width: 100%; max-width: 420px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+      background: var(--input-bg); color: var(--ink); cursor: pointer;
+    }
+    h1 { font-size: 20px; margin: 0 0 20px; }
+    h2.section-title { font-size: 15px; margin: 24px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+    .site-footer { padding: 16px 20px; background: var(--panel); border-top: 1px solid var(--line); }
+    .float-service { position: fixed; right: 18px; bottom: 18px; background: var(--primary); color: #fff; padding: 10px 12px; border-radius: 20px; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <strong>市场监管 · 企业备案（仿真）</strong>
+    <form id="global-search"><input name="keyword" placeholder="搜索政策"/></form>
+  </header>
+
+  <div class="ant-layout">
+    <aside class="sider" role="navigation">
+      <a href="#">工作台</a>
+      <a href="#">备案申请</a>
+      <div class="sidebar-search" style="margin-top:12px">
+        <input name="menu_filter" placeholder="筛选菜单"/>
+      </div>
+    </aside>
+
+    <div class="content">
+      <div class="ant-card">
+        <h1>对外贸易经营者备案登记</h1>
+        <form id="enterprise-form" data-fixture="enterprise" class="ant-form">
+          <h2 class="section-title" data-section="企业基本信息">企业基本信息</h2>
+          <section data-section="企业基本信息">
+            <div class="ant-form-item">
+              <div class="ant-form-item-label"><label for="company_name">企业名称</label></div>
+              <input id="company_name" name="company_name" class="ant-input" required/>
+            </div>
+            <div class="ant-form-item">
+              <div class="ant-form-item-label"><label for="uscc">统一社会信用代码</label></div>
+              <input id="uscc" name="uscc" class="ant-input" required maxlength="18"/>
+            </div>
+            <div class="ant-form-item">
+              <div class="ant-form-item-label"><label for="legal_person">法定代表人</label></div>
+              <input id="legal_person" name="legal_person" class="ant-input" required/>
+            </div>
+            <div class="ant-form-item">
+              <div class="ant-form-item-label"><label for="reg_capital">注册资本（万元）</label></div>
+              <input type="number" id="reg_capital" name="reg_capital" class="ant-input"/>
+            </div>
+            <div class="ant-form-item">
+              <div class="ant-form-item-label"><label for="company_type">企业类型</label></div>
+              <select id="company_type" name="company_type" class="ant-select" required>
+                <option value="">请选择</option>
+                <option value="llc">有限责任公司</option>
+                <option value="corp">股份有限公司</option>
+                <option value="sole">个人独资</option>
+              </select>
+            </div>
+            <div class="ant-form-item">
+              <div class="ant-form-item-label"><label id="industry_label">所属行业</label></div>
+              <div role="combobox" aria-labelledby="industry_label" aria-expanded="false" name="industry" id="industry" tabindex="0">批发和零售业 ▾</div>
+              <input type="hidden" name="industry" value="retail"/>
+            </div>
+            <div class="ant-form-item">
+              <div class="ant-form-item-label"><label for="reg_address">注册地址</label></div>
+              <textarea id="reg_address" name="reg_address" rows="2" required></textarea>
+            </div>
+          </section>
+
+          <h2 class="section-title">联系人信息</h2>
+          <section data-section="联系人信息">
+            <div class="ant-form-item">
+              <div class="ant-form-item-label"><label for="contact_name">联系人</label></div>
+              <input id="contact_name" name="contact_name" required/>
+            </div>
+            <div class="ant-form-item">
+              <div class="ant-form-item-label"><label for="contact_phone">联系电话</label></div>
+              <input id="contact_phone" name="contact_phone" required/>
+            </div>
+            <div class="ant-form-item">
+              <div class="ant-form-item-label"><label for="contact_email">电子邮箱</label></div>
+              <input id="contact_email" name="contact_email" type="text"/>
+            </div>
+          </section>
+
+          <h2 class="section-title">经营范围与附件</h2>
+          <section data-section="经营范围与附件">
+            <div class="ant-form-item">
+              <div class="ant-form-item-label"><label for="biz_scope">经营范围</label></div>
+              <textarea id="biz_scope" name="biz_scope" rows="4" required></textarea>
+            </div>
+            <div class="ant-form-item">
+              <div class="ant-form-item-label"><label for="license_file">营业执照扫描件</label></div>
+              <input type="file" id="license_file" name="license_file"/>
+            </div>
+            <div class="ant-form-item">
+              <div class="ant-form-item-label"><label for="auth_file">授权委托书</label></div>
+              <input type="file" id="auth_file" name="auth_file"/>
+            </div>
+          </section>
+
+          <div class="ant-form-item">
+            <div></div>
+            <label><input type="checkbox" name="enterprise_declare" required/> 本企业承诺提交材料真实有效</label>
+          </div>
+          <div class="ant-form-item">
+            <div></div>
+            <button type="submit">提交备案</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <form class="noise-form login-widget" data-noise="true">
+      <input name="portal_login" placeholder="统一身份登录账号"/>
+      <input type="password" name="portal_password" placeholder="密码"/>
+    </form>
+  </footer>
+  <div class="float-service chat-widget">客服<input name="cs_input" style="width:100px;margin-left:6px"/></div>
+</body>
+</html>

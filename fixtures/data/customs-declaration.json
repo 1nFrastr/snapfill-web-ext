@@ -1,0 +1,36 @@
+{
+  "consignee_name": "上海示例进出口有限公司",
+  "consignee_uscc": "91310000MA1KXXXX0X",
+  "customs_office": "2310",
+  "ie_date": "2026-07-20",
+  "transport_mode": "5",
+  "bill_no": "AWB123456789",
+  "trade_country": "美国",
+  "desp_country": "美国",
+  "trade_terms": "CIF",
+  "currency": "USD",
+  "freight_fee": 1200,
+  "insurance_fee": 80,
+  "other_fee": 0,
+  "goods": [
+    {
+      "hs_code": "8471309000",
+      "name": "便携式自动数据处理设备",
+      "qty": 200,
+      "unit": "011",
+      "price": 450,
+      "amount": 90000,
+      "origin": "美国"
+    },
+    {
+      "hs_code": "8504409999",
+      "name": "电源适配器",
+      "qty": 200,
+      "unit": "007",
+      "price": 12,
+      "amount": 2400,
+      "origin": "美国"
+    }
+  ],
+  "declare_truth": true
+}

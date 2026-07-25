@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <title>签证申请表 — 仿真</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
+  <style>
+    :root { color-scheme: light dark; }
+    body { background: #f3f5f9; }
+    .site-header { background: #1b2a4a; color: #fff; }
+    .chat-widget {
+      position: fixed; right: 16px; bottom: 16px; width: 220px;
+      background: var(--bs-body-bg, #fff); border: 1px solid var(--bs-border-color, #ddd);
+      padding: 10px; border-radius: 8px; z-index: 20;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #10151e; }
+      .site-footer { border-color: #2a3342 !important; }
+    }
+  </style>
+  <script>
+    (function () {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const apply = () => {
+        document.documentElement.setAttribute('data-bs-theme', mq.matches ? 'dark' : 'light');
+      };
+      apply();
+      mq.addEventListener('change', apply);
+    })();
+  </script>
+</head>
+<body>
+  <header class="site-header navbar navbar-dark px-3 py-2">
+    <span class="navbar-brand mb-0">签证中心（仿真）</span>
+    <form class="d-flex" role="search" id="global-search">
+      <input class="form-control form-control-sm" type="search" name="q" placeholder="搜索办证指南"/>
+    </form>
+  </header>
+
+  <div class="container my-4">
+    <div class="row">
+      <aside class="col-md-3 mb-3">
+        <div class="card sidebar-search">
+          <div class="card-body">
+            <h6 class="card-title">进度查询</h6>
+            <input class="form-control form-control-sm" name="progress_query" placeholder="申请号"/>
+          </div>
+        </div>
+      </aside>
+
+      <div class="col-md-9">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <h1 class="h4 mb-3">短期访问签证申请</h1>
+            <form id="visa-form" data-fixture="visa">
+              <fieldset class="mb-4" data-section="申请人信息">
+                <legend class="h6">申请人信息</legend>
+                <div class="row g-3">
+                  <div class="col-md-4">
+                    <label class="form-label" for="surname">姓（拼音）</label>
+                    <input class="form-control" id="surname" name="surname" required/>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" for="given_name">名（拼音）</label>
+                    <input class="form-control" id="given_name" name="given_name" required/>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" for="gender">性别</label>
+                    <select class="form-select" id="gender" name="gender" required>
+                      <option value="">请选择</option>
+                      <option value="M">男</option>
+                      <option value="F">女</option>
+                    </select>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" for="birth_date">出生日期</label>
+                    <input type="date" class="form-control" id="birth_date" name="birth_date" required/>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" for="nationality">国籍</label>
+                    <select class="form-select" id="nationality" name="nationality" required>
+                      <option value="CN">中国</option>
+                      <option value="US">美国</option>
+                      <option value="JP">日本</option>
+                      <option value="KR">韩国</option>
+                    </select>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" for="marital_status">婚姻状况</label>
+                    <div>
+                      <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="marital_status" id="ms_single" value="single"/>
+                        <label class="form-check-label" for="ms_single">未婚</label>
+                      </div>
+                      <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="marital_status" id="ms_married" value="married"/>
+                        <label class="form-check-label" for="ms_married">已婚</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset class="mb-4" data-section="护照信息">
+                <legend class="h6">护照信息</legend>
+                <div class="row g-3">
+                  <div class="col-md-4">
+                    <label class="form-label" for="passport_no">护照号码</label>
+                    <input class="form-control" id="passport_no" name="passport_no" required/>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" for="passport_issue_date">签发日期</label>
+                    <input type="date" class="form-control" id="passport_issue_date" name="passport_issue_date" required/>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" for="passport_expiry">有效期至</label>
+                    <input type="date" class="form-control" id="passport_expiry" name="passport_expiry" required/>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label" for="passport_issue_place">签发地点</label>
+                    <input class="form-control" id="passport_issue_place" name="passport_issue_place"/>
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset class="mb-4" data-section="行程信息">
+                <legend class="h6">行程信息</legend>
+                <div class="row g-3">
+                  <div class="col-md-4">
+                    <label class="form-label" for="entry_date">预计入境日期</label>
+                    <input type="date" class="form-control" id="entry_date" name="entry_date" required/>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" for="stay_days">停留天数</label>
+                    <input type="number" class="form-control" id="stay_days" name="stay_days" min="1" required/>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" for="entry_port">入境口岸</label>
+                    <input class="form-control" id="entry_port" name="entry_port" placeholder="如：上海浦东"/>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label" for="visit_purpose">访问目的</label>
+                    <textarea class="form-control" id="visit_purpose" name="visit_purpose" rows="3" required></textarea>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label" for="host_org">邀请方 / 接待单位</label>
+                    <input class="form-control" id="host_org" name="host_org"/>
+                  </div>
+                </div>
+              </fieldset>
+
+              <div class="mb-3">
+                <label class="form-label" for="captcha">验证码</label>
+                <input class="form-control" id="captcha" name="captcha" placeholder="请输入验证码"/>
+              </div>
+
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="visa_declare" name="visa_declare" required/>
+                <label class="form-check-label" for="visa_declare">我确认所填信息真实准确</label>
+              </div>
+              <button type="submit" class="btn btn-primary">提交申请</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer border-top py-3 mt-4">
+    <div class="container">
+      <form class="noise-form row g-2 align-items-center" data-noise="true">
+        <div class="col-auto"><span class="small text-muted">订阅签证资讯</span></div>
+        <div class="col-auto"><input class="form-control form-control-sm" name="newsletter_email" placeholder="邮箱"/></div>
+      </form>
+    </div>
+  </footer>
+
+  <div class="chat-widget">
+    <div class="small fw-bold mb-1">在线咨询</div>
+    <input class="form-control form-control-sm" name="chat_msg" placeholder="请问…"/>
+  </div>
+</body>
+</html>

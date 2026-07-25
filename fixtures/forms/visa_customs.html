@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>签证 + 海关申报向导</title>
+  <style>:root {
+  color-scheme: light dark;
+  --ink: #14212b;
+  --muted: #5d6b76;
+  --line: #d5dde3;
+  --bg: #f3f6f8;
+  --card: #fff;
+  --accent: #0f766e;
+  --accent-ink: #ecfdf8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e8eef2;
+    --muted: #9aabb7;
+    --line: #2a3640;
+    --bg: #10171c;
+    --card: #182028;
+    --accent: #2dd4bf;
+    --accent-ink: #042f2e;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Avenir Next", "PingFang SC", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+.topbar {
+  background: #1b2a4a;
+  color: #fff;
+  padding: 12px 20px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.topbar a { color: #a5f3fc; font-size: 0.85rem; }
+.wrap { max-width: 920px; margin: 24px auto; padding: 0 16px 48px; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 6%);
+}
+h1 { margin: 0 0 6px; font-size: 1.35rem; letter-spacing: -0.02em; }
+.sub { margin: 0 0 18px; color: var(--muted); font-size: 0.92rem; }
+.steps, .tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.steps button, .tabs button {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.steps button.is-active, .tabs button.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.panel[hidden] { display: none !important; }
+fieldset {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px 8px;
+  margin: 0 0 14px;
+}
+legend {
+  padding: 0 6px;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+@media (max-width: 720px) {
+  .grid { grid-template-columns: 1fr; }
+}
+.field { margin-bottom: 4px; }
+.form-label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+.form-control, .form-select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 11px;
+  font: inherit;
+  background: transparent;
+  color: var(--ink);
+}
+.radio-row, .check-row { display: flex; flex-wrap: wrap; gap: 10px 14px; }
+.radio, .check { font-size: 0.9rem; display: inline-flex; gap: 6px; align-items: center; }
+.nav-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 16px;
+}
+.nav-row button {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.nav-row button.ghost {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.noise {
+  position: fixed; right: 16px; bottom: 16px; width: 220px;
+  background: var(--card); border: 1px solid var(--line);
+  padding: 10px; border-radius: 8px; z-index: 20;
+}
+.site-footer {
+  margin-top: 28px; padding-top: 12px; border-top: 1px solid var(--line);
+  color: var(--muted); font-size: 0.8rem;
+}</style>
+</head>
+<body data-fixture="visa_customs">
+  <header class="topbar site-header">
+    <strong>签证 + 海关申报向导</strong>
+    <form id="global-search" role="search">
+      <input type="search" name="q" placeholder="搜索办证指南"/>
+    </form>
+  </header>
+  <main class="wrap">
+    <div class="card">
+      <h1>签证 + 海关申报向导</h1>
+      <p class="sub">澳大利亚旅游签证申请 + 入境海关申报网页表单（多步骤） · 字段与 fixtures/form_fields/visa_customs/fields.json 对齐</p>
+      <div class="steps" id="steps">
+      <button type="button" class="step-btn is-active" data-step="0">步骤1-申请人基本信息</button>
+      <button type="button" class="step-btn" data-step="1">步骤2-护照证件</button>
+      <button type="button" class="step-btn" data-step="2">步骤3-紧急联系人与配偶</button>
+      <button type="button" class="step-btn" data-step="3">步骤4-行程住宿机票</button>
+      <button type="button" class="step-btn" data-step="4">步骤5-海关检疫申报</button>
+      </div>
+      <form id="main-form" data-fixture="visa_customs">
+      <section class="panel" data-step-panel="0">
+    <p class="sub">签证申请向导 Step 1/5：申请人身份与联系方式</p>
+    <fieldset data-section="申请人基本信息">
+      <legend>申请人基本信息</legend>
+      <div class="grid">
+      <div class="field">
+  <label class="form-label" for="applicant.cn_name">中文姓名</label>
+  <input class="form-control" type="text" id="applicant.cn_name" name="applicant.cn_name"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="applicant.family_name">英文姓 Family Name</label>
+  <input class="form-control" type="text" id="applicant.family_name" name="applicant.family_name"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="applicant.given_name">英文名 Given Names</label>
+  <input class="form-control" type="text" id="applicant.given_name" name="applicant.given_name"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="applicant.gender">性别</label>
+  <select class="form-select" id="applicant.gender" name="applicant.gender">
+          <option value="">请选择</option>
+          <option value="男">男</option>
+          <option value="女">女</option>
+          <option value="其他">其他</option>
+  </select>
+</div>
+      <div class="field">
+  <label class="form-label" for="applicant.dob">出生日期</label>
+  <input class="form-control" type="date" id="applicant.dob" name="applicant.dob"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="applicant.birth_place">出生地</label>
+  <input class="form-control" type="text" id="applicant.birth_place" name="applicant.birth_place"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="applicant.nationality">国籍</label>
+  <input class="form-control" type="text" id="applicant.nationality" name="applicant.nationality"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="applicant.marital">婚姻状况</label>
+  <select class="form-select" id="applicant.marital" name="applicant.marital">
+          <option value="">请选择</option>
+          <option value="未婚">未婚</option>
+          <option value="已婚">已婚</option>
+          <option value="离异">离异</option>
+          <option value="丧偶">丧偶</option>
+  </select>
+</div>
+      <div class="field">
+  <label class="form-label" for="applicant.id_no">身份证号</label>
+  <input class="form-control" type="text" id="applicant.id_no" name="applicant.id_no"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="applicant.mobile">手机号码</label>
+  <input class="form-control" type="tel" id="applicant.mobile" name="applicant.mobile"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="applicant.email">电子邮箱</label>
+  <input class="form-control" type="email" id="applicant.email" name="applicant.email"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="applicant.address">常住地址</label>
+  <textarea class="form-control" id="applicant.address" name="applicant.address" rows="3"></textarea>
+</div>
+      <div class="field">
+  <label class="form-label" for="applicant.postcode">邮政编码</label>
+  <input class="form-control" type="text" id="applicant.postcode" name="applicant.postcode"/>
+</div>
+      </div>
+    </fieldset>
+  </section>
+<section class="panel" data-step-panel="1">
+    <p class="sub">签证申请向导 Step 2/5：护照与旅行证件</p>
+    <fieldset data-section="护照证件">
+      <legend>护照证件</legend>
+      <div class="grid">
+      <div class="field">
+  <label class="form-label" for="passport.number">护照号码</label>
+  <input class="form-control" type="text" id="passport.number" name="passport.number"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="passport.issue_country">护照签发国</label>
+  <input class="form-control" type="text" id="passport.issue_country" name="passport.issue_country"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="passport.issue_place">护照签发地</label>
+  <input class="form-control" type="text" id="passport.issue_place" name="passport.issue_place"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="passport.issue_date">护照签发日期</label>
+  <input class="form-control" type="date" id="passport.issue_date" name="passport.issue_date"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="passport.expiry">护照有效期至</label>
+  <input class="form-control" type="date" id="passport.expiry" name="passport.expiry"/>
+</div>
+      <div class="field" data-field-id="passport.other_passport">
+  <div class="form-label" id="lbl_passport.other_passport">是否持有其他护照</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_passport.other_passport">
+        <label class="radio"><input type="radio" name="passport.other_passport" id="passport.other_passport__0" value="是" aria-label="是否持有其他护照"/> 是</label>
+        <label class="radio"><input type="radio" name="passport.other_passport" id="passport.other_passport__1" value="否" aria-label="是否持有其他护照"/> 否</label>
+  </div>
+</div>
+      </div>
+    </fieldset>
+  </section>
+<section class="panel" data-step-panel="2">
+    <p class="sub">签证申请向导 Step 3/5：紧急联系人（注意勿与申请人本人混淆）</p>
+    <fieldset data-section="紧急联系人">
+      <legend>紧急联系人</legend>
+      <div class="grid">
+      <div class="field">
+  <label class="form-label" for="emergency.name">紧急联系人姓名</label>
+  <input class="form-control" type="text" id="emergency.name" name="emergency.name"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="emergency.relation">与申请人关系</label>
+  <select class="form-select" id="emergency.relation" name="emergency.relation">
+          <option value="">请选择</option>
+          <option value="配偶">配偶</option>
+          <option value="父母">父母</option>
+          <option value="子女">子女</option>
+          <option value="朋友">朋友</option>
+          <option value="其他">其他</option>
+  </select>
+</div>
+      <div class="field">
+  <label class="form-label" for="emergency.phone">紧急联系人电话</label>
+  <input class="form-control" type="tel" id="emergency.phone" name="emergency.phone"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="emergency.address">紧急联系人地址</label>
+  <textarea class="form-control" id="emergency.address" name="emergency.address" rows="3"></textarea>
+</div>
+      <div class="field">
+  <label class="form-label" for="spouse.name">配偶姓名</label>
+  <input class="form-control" type="text" id="spouse.name" name="spouse.name" placeholder="申请人配偶，不是申请人本人" title="申请人配偶，不是申请人本人"/>
+</div>
+      </div>
+    </fieldset>
+  </section>
+<section class="panel" data-step-panel="3">
+    <p class="sub">签证申请向导 Step 4/5：行程、航班与住宿</p>
+    <fieldset data-section="行程计划">
+      <legend>行程计划</legend>
+      <div class="grid">
+      <div class="field">
+  <label class="form-label" for="trip.purpose">访问目的</label>
+  <select class="form-select" id="trip.purpose" name="trip.purpose">
+          <option value="">请选择</option>
+          <option value="旅游观光">旅游观光</option>
+          <option value="探亲访友">探亲访友</option>
+          <option value="商务">商务</option>
+          <option value="留学">留学</option>
+          <option value="其他">其他</option>
+  </select>
+</div>
+      <div class="field">
+  <label class="form-label" for="trip.destination">拟入境国家/地区</label>
+  <input class="form-control" type="text" id="trip.destination" name="trip.destination"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="trip.port">拟入境口岸</label>
+  <input class="form-control" type="text" id="trip.port" name="trip.port"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="trip.arrival_date">预计入境日期</label>
+  <input class="form-control" type="date" id="trip.arrival_date" name="trip.arrival_date"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="trip.departure_date">预计离境日期</label>
+  <input class="form-control" type="date" id="trip.departure_date" name="trip.departure_date"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="trip.stay_days">停留天数</label>
+  <input class="form-control" type="number" id="trip.stay_days" name="trip.stay_days"/>
+</div>
+      <div class="field" data-field-id="trip.has_ticket">
+  <div class="form-label" id="lbl_trip.has_ticket">是否已购往返机票</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_trip.has_ticket">
+        <label class="radio"><input type="radio" name="trip.has_ticket" id="trip.has_ticket__0" value="是" aria-label="是否已购往返机票"/> 是</label>
+        <label class="radio"><input type="radio" name="trip.has_ticket" id="trip.has_ticket__1" value="否" aria-label="是否已购往返机票"/> 否</label>
+  </div>
+</div>
+      <div class="field">
+  <label class="form-label" for="trip.outbound_flight">出境航班号</label>
+  <input class="form-control" type="text" id="trip.outbound_flight" name="trip.outbound_flight"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="trip.inbound_flight">入境航班号</label>
+  <input class="form-control" type="text" id="trip.inbound_flight" name="trip.inbound_flight"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="trip.hotel_name">住宿名称</label>
+  <input class="form-control" type="text" id="trip.hotel_name" name="trip.hotel_name"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="trip.hotel_address">住宿地址</label>
+  <textarea class="form-control" id="trip.hotel_address" name="trip.hotel_address" rows="3"></textarea>
+</div>
+      <div class="field" data-field-id="trip.visit_friends">
+  <div class="form-label" id="lbl_trip.visit_friends">是否访问亲属朋友</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_trip.visit_friends">
+        <label class="radio"><input type="radio" name="trip.visit_friends" id="trip.visit_friends__0" value="是" aria-label="是否访问亲属朋友"/> 是</label>
+        <label class="radio"><input type="radio" name="trip.visit_friends" id="trip.visit_friends__1" value="否" aria-label="是否访问亲属朋友"/> 否</label>
+  </div>
+</div>
+      </div>
+    </fieldset>
+  </section>
+<section class="panel" data-step-panel="4">
+    <p class="sub">入境卡 / 海关检疫申报 Step 5/5：限制物品与背景声明</p>
+    <fieldset data-section="海关申报">
+      <legend>海关申报</legend>
+      <div class="grid">
+      <div class="field" data-field-id="customs.cash_over_limit">
+  <div class="form-label" id="lbl_customs.cash_over_limit">是否携带超过限额的现金或等价物</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_customs.cash_over_limit">
+        <label class="radio"><input type="radio" name="customs.cash_over_limit" id="customs.cash_over_limit__0" value="是" aria-label="是否携带超过限额的现金或等价物"/> 是</label>
+        <label class="radio"><input type="radio" name="customs.cash_over_limit" id="customs.cash_over_limit__1" value="否" aria-label="是否携带超过限额的现金或等价物"/> 否</label>
+  </div>
+</div>
+      <div class="field" data-field-id="customs.commercial_goods">
+  <div class="form-label" id="lbl_customs.commercial_goods">是否携带商业货物样品</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_customs.commercial_goods">
+        <label class="radio"><input type="radio" name="customs.commercial_goods" id="customs.commercial_goods__0" value="是" aria-label="是否携带商业货物样品"/> 是</label>
+        <label class="radio"><input type="radio" name="customs.commercial_goods" id="customs.commercial_goods__1" value="否" aria-label="是否携带商业货物样品"/> 否</label>
+  </div>
+</div>
+      <div class="field" data-field-id="customs.food">
+  <div class="form-label" id="lbl_customs.food">是否携带食品、肉类、蛋奶制品</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_customs.food">
+        <label class="radio"><input type="radio" name="customs.food" id="customs.food__0" value="是" aria-label="是否携带食品、肉类、蛋奶制品"/> 是</label>
+        <label class="radio"><input type="radio" name="customs.food" id="customs.food__1" value="否" aria-label="是否携带食品、肉类、蛋奶制品"/> 否</label>
+  </div>
+</div>
+      <div class="field" data-field-id="customs.plant">
+  <div class="form-label" id="lbl_customs.plant">是否携带植物、种子、土壤</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_customs.plant">
+        <label class="radio"><input type="radio" name="customs.plant" id="customs.plant__0" value="是" aria-label="是否携带植物、种子、土壤"/> 是</label>
+        <label class="radio"><input type="radio" name="customs.plant" id="customs.plant__1" value="否" aria-label="是否携带植物、种子、土壤"/> 否</label>
+  </div>
+</div>
+      <div class="field" data-field-id="customs.medicine">
+  <div class="form-label" id="lbl_customs.medicine">是否携带药品（处方药除外个人自用）</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_customs.medicine">
+        <label class="radio"><input type="radio" name="customs.medicine" id="customs.medicine__0" value="是" aria-label="是否携带药品（处方药除外个人自用）"/> 是</label>
+        <label class="radio"><input type="radio" name="customs.medicine" id="customs.medicine__1" value="否" aria-label="是否携带药品（处方药除外个人自用）"/> 否</label>
+  </div>
+</div>
+      <div class="field" data-field-id="customs.farm">
+  <div class="form-label" id="lbl_customs.farm">过去30天是否到过农场或接触过活畜</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_customs.farm">
+        <label class="radio"><input type="radio" name="customs.farm" id="customs.farm__0" value="是" aria-label="过去30天是否到过农场或接触过活畜"/> 是</label>
+        <label class="radio"><input type="radio" name="customs.farm" id="customs.farm__1" value="否" aria-label="过去30天是否到过农场或接触过活畜"/> 否</label>
+  </div>
+</div>
+      <div class="field" data-field-id="bg.refused_entry">
+  <div class="form-label" id="lbl_bg.refused_entry">是否曾被拒绝入境或遣返</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_bg.refused_entry">
+        <label class="radio"><input type="radio" name="bg.refused_entry" id="bg.refused_entry__0" value="是" aria-label="是否曾被拒绝入境或遣返"/> 是</label>
+        <label class="radio"><input type="radio" name="bg.refused_entry" id="bg.refused_entry__1" value="否" aria-label="是否曾被拒绝入境或遣返"/> 否</label>
+  </div>
+</div>
+      <div class="field" data-field-id="bg.criminal">
+  <div class="form-label" id="lbl_bg.criminal">是否有犯罪记录</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_bg.criminal">
+        <label class="radio"><input type="radio" name="bg.criminal" id="bg.criminal__0" value="是" aria-label="是否有犯罪记录"/> 是</label>
+        <label class="radio"><input type="radio" name="bg.criminal" id="bg.criminal__1" value="否" aria-label="是否有犯罪记录"/> 否</label>
+  </div>
+</div>
+      <div class="field">
+  <label class="form-label" for="customs.notes">申报备注</label>
+  <textarea class="form-control" id="customs.notes" name="customs.notes" rows="3"></textarea>
+</div>
+      <div class="field" data-field-id="companion.has_minor">
+  <div class="form-label" id="lbl_companion.has_minor">是否有同行未成年人</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_companion.has_minor">
+        <label class="radio"><input type="radio" name="companion.has_minor" id="companion.has_minor__0" value="是" aria-label="是否有同行未成年人"/> 是</label>
+        <label class="radio"><input type="radio" name="companion.has_minor" id="companion.has_minor__1" value="否" aria-label="是否有同行未成年人"/> 否</label>
+  </div>
+</div>
+      <div class="field">
+  <label class="form-label" for="companion.child_name">同行子女姓名</label>
+  <input class="form-control" type="text" id="companion.child_name" name="companion.child_name"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="companion.child_dob">同行子女出生日期</label>
+  <input class="form-control" type="date" id="companion.child_dob" name="companion.child_dob"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="companion.child_passport">同行子女护照号</label>
+  <input class="form-control" type="text" id="companion.child_passport" name="companion.child_passport"/>
+</div>
+      </div>
+    </fieldset>
+  </section>
+        <div class="nav-row">
+          <button type="button" class="ghost" id="prev">上一步</button>
+          <button type="button" id="next">下一步</button>
+        </div>
+      </form>
+      <p class="site-footer">提示：浏览器中默认只显示当前步骤；加 <code>?all=1</code> 展开全部。CLI/e2e（不执行脚本）可扫到全部字段。</p>
+    </div>
+  </main>
+  <div class="chat-widget noise">
+    <div>在线客服</div>
+    <input name="chat_msg" placeholder="输入消息"/>
+  </div>
+  <script>
+    (function () {
+      const panels = [...document.querySelectorAll('[data-step-panel]')];
+      const buttons = [...document.querySelectorAll('.step-btn')];
+      let idx = 0;
+      const showAll = new URLSearchParams(location.search).has('all');
+      function show(i) {
+        idx = Math.max(0, Math.min(panels.length - 1, i));
+        panels.forEach((p, n) => { p.hidden = showAll ? false : n !== idx; });
+        buttons.forEach((b, n) => b.classList.toggle('is-active', n === idx));
+      }
+      buttons.forEach((b) => b.addEventListener('click', () => show(Number(b.dataset.step))));
+      document.getElementById('prev')?.addEventListener('click', () => show(idx - 1));
+      document.getElementById('next')?.addEventListener('click', () => show(idx + 1));
+      show(0);
+    })();
+  </script>
+</body>
+</html>

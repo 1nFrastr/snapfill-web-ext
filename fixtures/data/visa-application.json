@@ -1,0 +1,18 @@
+{
+  "surname": "ZHANG",
+  "given_name": "WEI",
+  "gender": "M",
+  "birth_date": "1990-05-12",
+  "nationality": "CN",
+  "marital_status": "married",
+  "passport_no": "E12345678",
+  "passport_issue_date": "2020-01-15",
+  "passport_expiry": "2030-01-14",
+  "passport_issue_place": "上海",
+  "entry_date": "2026-09-01",
+  "stay_days": 14,
+  "entry_port": "上海浦东",
+  "visit_purpose": "参加行业展会并进行商务洽谈",
+  "host_org": "示例会展有限公司",
+  "visa_declare": true
+}

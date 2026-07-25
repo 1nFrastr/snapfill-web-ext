@@ -1,0 +1,24 @@
+{
+  "fixture": "trade-tax-form",
+  "mustIncludeNames": [
+    "tax_id",
+    "taxpayer_name",
+    "tax_office",
+    "tax_period",
+    "related_customs_no",
+    "import_contract_no",
+    "tax_lines[0].tax_type",
+    "tax_lines[0].item_name",
+    "tax_lines[0].base",
+    "handler_name",
+    "handler_phone",
+    "tax_declare"
+  ],
+  "mustExcludeNames": [
+    "tax_search",
+    "newsletter_email",
+    "bot_q",
+    "tax_lines[__i].item_name"
+  ],
+  "notes": "只读合计字段可提取也可视产品策略排除；一期允许保留。"
+}

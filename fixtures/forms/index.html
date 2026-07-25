@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Snapfill Fixtures Index</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --ink: #14212b;
+      --muted: #5d6b76;
+      --link: #0f766e;
+      --bg: #f4f7f5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ink: #e8eef2;
+        --muted: #9aabb7;
+        --link: #2dd4bf;
+        --bg: #121c22;
+      }
+    }
+    body {
+      font-family: "Avenir Next", "PingFang SC", sans-serif;
+      max-width: 720px;
+      margin: 40px auto;
+      padding: 0 16px;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    p { color: var(--muted); }
+    a { color: var(--link); }
+    li { margin: 8px 0; }
+    h2 { font-size: 1rem; margin: 28px 0 8px; }
+  </style>
+</head>
+<body>
+  <h1>Snapfill 测试表单</h1>
+  <p>与后端已跑通用例对齐：<code>fixtures/form_fields/*/fields.json</code> + <code>kb.txt</code>。</p>
+
+  <h2>主用例（推荐）</h2>
+  <ul>
+    <li><a href="./visa_customs.html">签证 + 海关申报向导</a>（多步骤，对应 <code>visa_customs</code>）</li>
+    <li><a href="./gov_project.html">政企项目网上申报</a>（多页签，对应 <code>gov_project</code>）</li>
+    <li><a href="./visa_customs.html?all=1">签证向导 · 展开全部步骤</a></li>
+    <li><a href="./gov_project.html?all=1">项目申报 · 展开全部页签</a></li>
+  </ul>
+
+  <h2>旧仿真页</h2>
+  <ul>
+    <li><a href="./customs-declaration.html">海关货物申报单</a></li>
+    <li><a href="./visa-application.html">签证申请表（旧）</a></li>
+    <li><a href="./enterprise-filing.html">企业资质备案</a></li>
+    <li><a href="./trade-tax-form.html">进出口税收附加申报</a></li>
+  </ul>
+</body>
+</html>

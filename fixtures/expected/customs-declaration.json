@@ -1,0 +1,35 @@
+{
+  "fixture": "customs-declaration",
+  "mustIncludeNames": [
+    "pre_entry_no",
+    "customs_id",
+    "consignee_name",
+    "consignee_uscc",
+    "customs_office",
+    "ie_date",
+    "transport_mode",
+    "bill_no",
+    "trade_country",
+    "desp_country",
+    "trade_terms",
+    "header_remark",
+    "goods[0].hs_code",
+    "goods[0].name",
+    "goods[0].qty",
+    "goods[0].unit",
+    "goods[1].hs_code",
+    "freight_fee",
+    "insurance_fee",
+    "currency",
+    "declare_truth"
+  ],
+  "mustExcludeNames": [
+    "site_keyword",
+    "quick_search",
+    "newsletter_email",
+    "chat_draft",
+    "login_user",
+    "login_pass",
+    "goods[__i].hs_code"
+  ]
+}

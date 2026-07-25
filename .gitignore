@@ -14,6 +14,13 @@ stats-*.json
 .wxt
 web-ext.config.ts
 
+# Local secrets
+lib/ai/config.ts
+lib/api/config.ts
+
+# CLI outputs
+output/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

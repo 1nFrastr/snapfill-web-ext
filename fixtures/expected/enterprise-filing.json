@@ -1,0 +1,26 @@
+{
+  "fixture": "enterprise-filing",
+  "mustIncludeNames": [
+    "company_name",
+    "uscc",
+    "legal_person",
+    "reg_capital",
+    "company_type",
+    "industry",
+    "reg_address",
+    "contact_name",
+    "contact_phone",
+    "contact_email",
+    "biz_scope",
+    "license_file",
+    "auth_file",
+    "enterprise_declare"
+  ],
+  "mustExcludeNames": [
+    "keyword",
+    "menu_filter",
+    "portal_login",
+    "portal_password",
+    "cs_input"
+  ]
+}

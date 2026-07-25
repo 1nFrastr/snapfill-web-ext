@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <title>进出口税收附加申报 — 仿真</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --page-bg: #eef1f4;
+      --ink: #222;
+      --panel: #fff;
+      --border: #d0d5db;
+      --fieldset: #c5ccd4;
+      --input-border: #bcc4ce;
+      --input-bg: #fff;
+      --readonly-bg: #f3f5f7;
+      --readonly-ink: #666;
+      --th-bg: #f7eaea;
+      --muted: #666;
+      --widget-bg: #fff;
+      --widget-border: #ccc;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page-bg: #14181d;
+        --ink: #e8eef2;
+        --panel: #1c232b;
+        --border: #2f3945;
+        --fieldset: #3a4654;
+        --input-border: #3a4654;
+        --input-bg: #151b22;
+        --readonly-bg: #222a33;
+        --readonly-ink: #9aabb7;
+        --th-bg: #3a2428;
+        --muted: #9aabb7;
+        --widget-bg: #1c232b;
+        --widget-border: #3a4654;
+      }
+    }
+    body { margin: 0; font-family: "Microsoft YaHei", sans-serif; background: var(--page-bg); color: var(--ink); }
+    header.site-header { background: linear-gradient(90deg, #6b1d1d, #a33); color: #fff; padding: 12px 18px; display: flex; gap: 12px; align-items: center; }
+    header input { padding: 4px 8px; background: var(--input-bg); color: var(--ink); border: 1px solid var(--input-border); }
+    .wrap { max-width: 960px; margin: 16px auto; background: var(--panel); border: 1px solid var(--border); padding: 18px; }
+    h1 { text-align: center; font-size: 18px; }
+    fieldset { border: 1px solid var(--fieldset); margin: 0 0 14px; padding: 12px; }
+    legend { padding: 0 6px; font-weight: 600; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+    label.field { display: grid; gap: 4px; font-size: 13px; }
+    input, select, textarea {
+      padding: 6px 8px; font: inherit; border: 1px solid var(--input-border); border-radius: 2px;
+      background: var(--input-bg); color: var(--ink);
+    }
+    input[readonly] { background: var(--readonly-bg); color: var(--readonly-ink); }
+    table.line-items { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.line-items th, table.line-items td { border: 1px solid var(--fieldset); padding: 6px; }
+    table.line-items th { background: var(--th-bg); }
+    tr[data-template="true"] { display: none; }
+    footer.site-footer { max-width: 960px; margin: 0 auto 24px; padding: 12px; color: var(--muted); font-size: 12px; }
+    .chat-widget { position: fixed; left: 12px; bottom: 12px; background: var(--widget-bg); border: 1px solid var(--widget-border); padding: 8px; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <strong>税务局 · 进出口税收（仿真）</strong>
+    <form id="global-search"><input type="search" name="tax_search" placeholder="搜索办税指南"/></form>
+  </header>
+
+  <div class="wrap">
+    <h1>进口环节增值税 / 消费税附加申报表</h1>
+    <form id="trade-tax-form" data-fixture="trade-tax">
+      <fieldset data-section="纳税人信息">
+        <legend>纳税人信息</legend>
+        <div class="grid">
+          <label class="field">纳税人识别号
+            <input name="tax_id" required/>
+          </label>
+          <label class="field">纳税人名称
+            <input name="taxpayer_name" required/>
+          </label>
+          <label class="field">所属税务机关
+            <select name="tax_office" required>
+              <option value="">请选择</option>
+              <option value="3100">上海市税务局</option>
+              <option value="4403">深圳市税务局</option>
+              <option value="1100">北京市税务局</option>
+            </select>
+          </label>
+          <label class="field">申报所属期
+            <input type="month" name="tax_period" required/>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset data-section="报关关联信息">
+        <legend>报关关联信息</legend>
+        <div class="grid">
+          <label class="field">关联报关单号
+            <input name="related_customs_no" required/>
+          </label>
+          <label class="field">进口合同号
+            <input name="import_contract_no"/>
+          </label>
+          <label class="field">完税价格合计（只读计算噪声）
+            <input name="dutiable_value_total" readonly value="0.00"/>
+          </label>
+          <label class="field">税额合计（只读）
+            <input name="tax_amount_total" readonly value="0.00"/>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset data-section="税目明细">
+        <legend>税目明细</legend>
+        <table class="line-items repeatable" data-repeatable>
+          <thead>
+            <tr>
+              <th>税种</th>
+              <th>税目</th>
+              <th>计税依据</th>
+              <th>税率(%)</th>
+              <th>应纳税额</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-row="0" class="goods-row">
+              <td>
+                <select name="tax_lines[0].tax_type">
+                  <option value="vat">增值税</option>
+                  <option value="excise">消费税</option>
+                </select>
+              </td>
+              <td><input name="tax_lines[0].item_name" required/></td>
+              <td><input type="number" name="tax_lines[0].base" step="0.01" required/></td>
+              <td><input type="number" name="tax_lines[0].rate" step="0.01" required/></td>
+              <td><input type="number" name="tax_lines[0].amount" step="0.01"/></td>
+            </tr>
+            <tr data-row="1" class="goods-row">
+              <td>
+                <select name="tax_lines[1].tax_type">
+                  <option value="vat">增值税</option>
+                  <option value="excise">消费税</option>
+                </select>
+              </td>
+              <td><input name="tax_lines[1].item_name"/></td>
+              <td><input type="number" name="tax_lines[1].base" step="0.01"/></td>
+              <td><input type="number" name="tax_lines[1].rate" step="0.01"/></td>
+              <td><input type="number" name="tax_lines[1].amount" step="0.01"/></td>
+            </tr>
+            <tr data-template="true" class="template-row">
+              <td><select name="tax_lines[__i].tax_type"><option>增值税</option></select></td>
+              <td><input name="tax_lines[__i].item_name"/></td>
+              <td><input name="tax_lines[__i].base"/></td>
+              <td><input name="tax_lines[__i].rate"/></td>
+              <td><input name="tax_lines[__i].amount"/></td>
+            </tr>
+          </tbody>
+        </table>
+      </fieldset>
+
+      <fieldset data-section="声明">
+        <legend>声明</legend>
+        <label><input type="checkbox" name="tax_declare" required/> 本纳税人确认申报数据属实</label>
+        <div style="margin-top:10px">
+          <label class="field">经办人
+            <input name="handler_name" required/>
+          </label>
+          <label class="field" style="margin-top:8px">经办人电话
+            <input name="handler_phone" required/>
+          </label>
+        </div>
+      </fieldset>
+
+      <button type="submit">申报提交</button>
+    </form>
+  </div>
+
+  <footer class="site-footer">
+    <form class="noise-form newsletter" data-noise="true">
+      订阅退税政策：<input name="newsletter_email" placeholder="邮箱"/>
+    </form>
+  </footer>
+  <div class="chat-widget">
+    智能问答 <input name="bot_q" placeholder="问点什么"/>
+  </div>
+</body>
+</html>

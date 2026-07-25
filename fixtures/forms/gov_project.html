@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>政企项目网上申报</title>
+  <style>:root {
+  color-scheme: light dark;
+  --ink: #14212b;
+  --muted: #5d6b76;
+  --line: #d5dde3;
+  --bg: #f3f6f8;
+  --card: #fff;
+  --accent: #0f766e;
+  --accent-ink: #ecfdf8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e8eef2;
+    --muted: #9aabb7;
+    --line: #2a3640;
+    --bg: #10171c;
+    --card: #182028;
+    --accent: #2dd4bf;
+    --accent-ink: #042f2e;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Avenir Next", "PingFang SC", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+.topbar {
+  background: #1b2a4a;
+  color: #fff;
+  padding: 12px 20px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.topbar a { color: #a5f3fc; font-size: 0.85rem; }
+.wrap { max-width: 920px; margin: 24px auto; padding: 0 16px 48px; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 6%);
+}
+h1 { margin: 0 0 6px; font-size: 1.35rem; letter-spacing: -0.02em; }
+.sub { margin: 0 0 18px; color: var(--muted); font-size: 0.92rem; }
+.steps, .tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.steps button, .tabs button {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.steps button.is-active, .tabs button.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.panel[hidden] { display: none !important; }
+fieldset {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px 8px;
+  margin: 0 0 14px;
+}
+legend {
+  padding: 0 6px;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+@media (max-width: 720px) {
+  .grid { grid-template-columns: 1fr; }
+}
+.field { margin-bottom: 4px; }
+.form-label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+.form-control, .form-select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 11px;
+  font: inherit;
+  background: transparent;
+  color: var(--ink);
+}
+.radio-row, .check-row { display: flex; flex-wrap: wrap; gap: 10px 14px; }
+.radio, .check { font-size: 0.9rem; display: inline-flex; gap: 6px; align-items: center; }
+.nav-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 16px;
+}
+.nav-row button {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.nav-row button.ghost {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.noise {
+  position: fixed; right: 16px; bottom: 16px; width: 220px;
+  background: var(--card); border: 1px solid var(--line);
+  padding: 10px; border-radius: 8px; z-index: 20;
+}
+.site-footer {
+  margin-top: 28px; padding-top: 12px; border-top: 1px solid var(--line);
+  color: var(--muted); font-size: 0.8rem;
+}</style>
+</head>
+<body data-fixture="gov_project">
+  <header class="topbar site-header">
+    <strong>政企项目网上申报</strong>
+    <form id="global-search" role="search">
+      <input type="search" name="q" placeholder="搜索申报指南"/>
+    </form>
+  </header>
+  <main class="wrap">
+    <div class="card">
+      <h1>政企项目网上申报</h1>
+      <p class="sub">市级数字化专项 — 政企项目网上申报系统（多页签） · 字段与 fixtures/form_fields/gov_project/fields.json 对齐</p>
+      <div class="tabs" id="tabs">
+      <button type="button" class="tab-btn is-active" data-tab="0">页签A-申报单位信息</button>
+      <button type="button" class="tab-btn" data-tab="1">页签B-项目基本情况</button>
+      <button type="button" class="tab-btn" data-tab="2">页签C-资金预算</button>
+      <button type="button" class="tab-btn" data-tab="3">页签D-建设内容与绩效</button>
+      <button type="button" class="tab-btn" data-tab="4">页签E-合规承诺</button>
+      </div>
+      <form id="main-form" data-fixture="gov_project">
+      <section class="panel" data-tab-panel="0">
+    <p class="sub">项目申报系统：单位资质与联系人页签</p>
+    <fieldset data-section="申报单位">
+      <legend>申报单位</legend>
+      <div class="grid">
+      <div class="field">
+  <label class="form-label" for="org.full_name">单位全称</label>
+  <input class="form-control" type="text" id="org.full_name" name="org.full_name"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.short_name">单位简称</label>
+  <input class="form-control" type="text" id="org.short_name" name="org.short_name"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.uscc">统一社会信用代码</label>
+  <input class="form-control" type="text" id="org.uscc" name="org.uscc"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.nature">单位性质</label>
+  <select class="form-select" id="org.nature" name="org.nature">
+          <option value="">请选择</option>
+          <option value="国有企业">国有企业</option>
+          <option value="民营企业">民营企业</option>
+          <option value="事业单位">事业单位</option>
+          <option value="高校院所">高校院所</option>
+          <option value="其他">其他</option>
+  </select>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.industry">所属行业</label>
+  <input class="form-control" type="text" id="org.industry" name="org.industry"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.reg_address">注册地址</label>
+  <textarea class="form-control" id="org.reg_address" name="org.reg_address" rows="3"></textarea>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.mail_address">通讯地址</label>
+  <textarea class="form-control" id="org.mail_address" name="org.mail_address" rows="3"></textarea>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.postcode">邮政编码</label>
+  <input class="form-control" type="text" id="org.postcode" name="org.postcode"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.legal_name">法定代表人</label>
+  <input class="form-control" type="text" id="org.legal_name" name="org.legal_name"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.legal_id">法定代表人身份证号</label>
+  <input class="form-control" type="text" id="org.legal_id" name="org.legal_id"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.contact_name">单位联系人</label>
+  <input class="form-control" type="text" id="org.contact_name" name="org.contact_name" placeholder="申报专员，不是项目负责人" title="申报专员，不是项目负责人"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.contact_title">联系人职务</label>
+  <input class="form-control" type="text" id="org.contact_title" name="org.contact_title"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.contact_mobile">联系人手机</label>
+  <input class="form-control" type="tel" id="org.contact_mobile" name="org.contact_mobile"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.contact_email">联系人邮箱</label>
+  <input class="form-control" type="email" id="org.contact_email" name="org.contact_email"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.bank">开户银行</label>
+  <input class="form-control" type="text" id="org.bank" name="org.bank"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="org.bank_account">银行账号</label>
+  <input class="form-control" type="text" id="org.bank_account" name="org.bank_account"/>
+</div>
+      </div>
+    </fieldset>
+  </section>
+<section class="panel" data-tab-panel="1">
+    <p class="sub">项目申报系统：项目概况与负责人页签</p>
+    <fieldset data-section="项目信息">
+      <legend>项目信息</legend>
+      <div class="grid">
+      <div class="field">
+  <label class="form-label" for="proj.name">项目名称</label>
+  <input class="form-control" type="text" id="proj.name" name="proj.name"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="proj.category">项目类别</label>
+  <select class="form-select" id="proj.category" name="proj.category">
+          <option value="">请选择</option>
+          <option value="数字化转型示范项目">数字化转型示范项目</option>
+          <option value="工业互联网平台项目">工业互联网平台项目</option>
+          <option value="智能制造试点">智能制造试点</option>
+          <option value="其他">其他</option>
+  </select>
+</div>
+      <div class="field">
+  <label class="form-label" for="proj.program">所属专项</label>
+  <input class="form-control" type="text" id="proj.program" name="proj.program"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="proj.year">申报年度</label>
+  <input class="form-control" type="text" id="proj.year" name="proj.year"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="proj.start">建设起始日期</label>
+  <input class="form-control" type="date" id="proj.start" name="proj.start"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="proj.end">建设截止日期</label>
+  <input class="form-control" type="date" id="proj.end" name="proj.end"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="proj.months">建设周期（月）</label>
+  <input class="form-control" type="number" id="proj.months" name="proj.months"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="proj.location">实施地点</label>
+  <input class="form-control" type="text" id="proj.location" name="proj.location"/>
+</div>
+      <div class="field" data-field-id="proj.joint">
+  <div class="form-label" id="lbl_proj.joint">是否联合申报</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_proj.joint">
+        <label class="radio"><input type="radio" name="proj.joint" id="proj.joint__0" value="是" aria-label="是否联合申报"/> 是</label>
+        <label class="radio"><input type="radio" name="proj.joint" id="proj.joint__1" value="否" aria-label="是否联合申报"/> 否</label>
+  </div>
+</div>
+      <div class="field">
+  <label class="form-label" for="proj.joint_org">联合申报单位</label>
+  <input class="form-control" type="text" id="proj.joint_org" name="proj.joint_org"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="proj.leader">项目负责人</label>
+  <input class="form-control" type="text" id="proj.leader" name="proj.leader" placeholder="技术负责人，不是单位联系人赵敏" title="技术负责人，不是单位联系人赵敏"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="proj.leader_title">负责人职称</label>
+  <input class="form-control" type="text" id="proj.leader_title" name="proj.leader_title"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="proj.leader_mobile">负责人手机</label>
+  <input class="form-control" type="tel" id="proj.leader_mobile" name="proj.leader_mobile"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="proj.leader_email">负责人邮箱</label>
+  <input class="form-control" type="email" id="proj.leader_email" name="proj.leader_email"/>
+</div>
+      </div>
+    </fieldset>
+  </section>
+<section class="panel" data-tab-panel="2">
+    <p class="sub">项目申报系统：投资构成与财政资助页签（单位：万元）</p>
+    <fieldset data-section="资金预算">
+      <legend>资金预算</legend>
+      <div class="grid">
+      <div class="field">
+  <label class="form-label" for="budget.total">项目总投资（万元）</label>
+  <input class="form-control" type="number" id="budget.total" name="budget.total"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="budget.grant">申请财政资助资金（万元）</label>
+  <input class="form-control" type="number" id="budget.grant" name="budget.grant"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="budget.self">自筹资金（万元）</label>
+  <input class="form-control" type="number" id="budget.self" name="budget.self"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="budget.equipment">其中设备费（万元）</label>
+  <input class="form-control" type="number" id="budget.equipment" name="budget.equipment"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="budget.software">其中软件与云服务费（万元）</label>
+  <input class="form-control" type="number" id="budget.software" name="budget.software"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="budget.personnel">其中人员费（万元）</label>
+  <input class="form-control" type="number" id="budget.personnel" name="budget.personnel"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="budget.other">其中其他费用（万元）</label>
+  <input class="form-control" type="number" id="budget.other" name="budget.other"/>
+</div>
+      <div class="field" data-field-id="budget.self_ready">
+  <div class="form-label" id="lbl_budget.self_ready">是否已落实自筹资金</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_budget.self_ready">
+        <label class="radio"><input type="radio" name="budget.self_ready" id="budget.self_ready__0" value="是" aria-label="是否已落实自筹资金"/> 是</label>
+        <label class="radio"><input type="radio" name="budget.self_ready" id="budget.self_ready__1" value="否" aria-label="是否已落实自筹资金"/> 否</label>
+  </div>
+</div>
+      <div class="field">
+  <label class="form-label" for="budget.proof_no">配套资金证明材料编号</label>
+  <input class="form-control" type="text" id="budget.proof_no" name="budget.proof_no"/>
+</div>
+      </div>
+    </fieldset>
+  </section>
+<section class="panel" data-tab-panel="3">
+    <p class="sub">项目申报系统：建设内容与绩效指标页签</p>
+    <fieldset data-section="建设内容">
+      <legend>建设内容</legend>
+      <div class="grid">
+      <div class="field">
+  <label class="form-label" for="content.summary">建设内容摘要</label>
+  <textarea class="form-control" id="content.summary" name="content.summary" rows="3"></textarea>
+</div>
+      <div class="field">
+  <label class="form-label" for="content.tasks">主要建设任务</label>
+  <textarea class="form-control" id="content.tasks" name="content.tasks" rows="3"></textarea>
+</div>
+      <div class="field">
+  <label class="form-label" for="content.output">预期产出</label>
+  <textarea class="form-control" id="content.output" name="content.output" rows="3"></textarea>
+</div>
+      <div class="field">
+  <label class="form-label" for="content.benefit">预期效益</label>
+  <textarea class="form-control" id="content.benefit" name="content.benefit" rows="3"></textarea>
+</div>
+      <div class="field" data-field-id="compliance.data_security">
+  <div class="form-label" id="lbl_compliance.data_security">是否涉及数据安全评估</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_compliance.data_security">
+        <label class="radio"><input type="radio" name="compliance.data_security" id="compliance.data_security__0" value="是" aria-label="是否涉及数据安全评估"/> 是</label>
+        <label class="radio"><input type="radio" name="compliance.data_security" id="compliance.data_security__1" value="否" aria-label="是否涉及数据安全评估"/> 否</label>
+  </div>
+</div>
+      <div class="field" data-field-id="compliance.cii">
+  <div class="form-label" id="lbl_compliance.cii">是否涉及关键信息基础设施</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_compliance.cii">
+        <label class="radio"><input type="radio" name="compliance.cii" id="compliance.cii__0" value="是" aria-label="是否涉及关键信息基础设施"/> 是</label>
+        <label class="radio"><input type="radio" name="compliance.cii" id="compliance.cii__1" value="否" aria-label="是否涉及关键信息基础设施"/> 否</label>
+  </div>
+</div>
+      <div class="field">
+  <label class="form-label" for="compliance.ip">知识产权归属</label>
+  <input class="form-control" type="text" id="compliance.ip" name="compliance.ip"/>
+</div>
+      </div>
+    </fieldset>
+  </section>
+<section class="panel" data-tab-panel="4">
+    <p class="sub">项目申报系统：合规审查与法人承诺页签</p>
+    <fieldset data-section="合规承诺">
+      <legend>合规承诺</legend>
+      <div class="grid">
+      <div class="field" data-field-id="compliance.dishonest">
+  <div class="form-label" id="lbl_compliance.dishonest">近三年是否存在严重失信记录</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_compliance.dishonest">
+        <label class="radio"><input type="radio" name="compliance.dishonest" id="compliance.dishonest__0" value="是" aria-label="近三年是否存在严重失信记录"/> 是</label>
+        <label class="radio"><input type="radio" name="compliance.dishonest" id="compliance.dishonest__1" value="否" aria-label="近三年是否存在严重失信记录"/> 否</label>
+  </div>
+</div>
+      <div class="field" data-field-id="compliance.false">
+  <div class="form-label" id="lbl_compliance.false">是否虚报材料或重复申报</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_compliance.false">
+        <label class="radio"><input type="radio" name="compliance.false" id="compliance.false__0" value="是" aria-label="是否虚报材料或重复申报"/> 是</label>
+        <label class="radio"><input type="radio" name="compliance.false" id="compliance.false__1" value="否" aria-label="是否虚报材料或重复申报"/> 否</label>
+  </div>
+</div>
+      <div class="field" data-field-id="compliance.public">
+  <div class="form-label" id="lbl_compliance.public">是否同意信息公开</div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="lbl_compliance.public">
+        <label class="radio"><input type="radio" name="compliance.public" id="compliance.public__0" value="是" aria-label="是否同意信息公开"/> 是</label>
+        <label class="radio"><input type="radio" name="compliance.public" id="compliance.public__1" value="否" aria-label="是否同意信息公开"/> 否</label>
+  </div>
+</div>
+      <div class="field">
+  <label class="form-label" for="compliance.signer">承诺人签字（姓名）</label>
+  <input class="form-control" type="text" id="compliance.signer" name="compliance.signer" placeholder="应为法定代表人" title="应为法定代表人"/>
+</div>
+      <div class="field">
+  <label class="form-label" for="compliance.sign_date">承诺日期</label>
+  <input class="form-control" type="date" id="compliance.sign_date" name="compliance.sign_date"/>
+</div>
+      </div>
+    </fieldset>
+  </section>
+      </form>
+      <p class="site-footer">提示：浏览器中默认只显示当前页签；加 <code>?all=1</code> 展开全部。CLI/e2e（不执行脚本）可扫到全部字段。</p>
+    </div>
+  </main>
+  <aside class="sidebar-search noise" style="position:fixed;left:16px;bottom:16px;width:200px;background:var(--card);border:1px solid var(--line);padding:10px;border-radius:8px;">
+    <div>进度查询</div>
+    <input name="progress_query" placeholder="申请号"/>
+  </aside>
+  <script>
+    (function () {
+      const panels = [...document.querySelectorAll('[data-tab-panel]')];
+      const buttons = [...document.querySelectorAll('.tab-btn')];
+      const showAll = new URLSearchParams(location.search).has('all');
+      function show(i) {
+        panels.forEach((p, n) => { p.hidden = showAll ? false : n !== i; });
+        buttons.forEach((b, n) => b.classList.toggle('is-active', n === i));
+      }
+      buttons.forEach((b) => b.addEventListener('click', () => show(Number(b.dataset.tab))));
+      show(0);
+    })();
+  </script>
+</body>
+</html>

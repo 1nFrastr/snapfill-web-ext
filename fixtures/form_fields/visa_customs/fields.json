@@ -1,0 +1,84 @@
+{
+  "page_context": "澳大利亚旅游签证申请 + 入境海关申报网页表单（多步骤）",
+  "sections": [
+    {
+      "name": "步骤1-申请人基本信息",
+      "page_context": "签证申请向导 Step 1/5：申请人身份与联系方式",
+      "fields": [
+        {"id": "applicant.cn_name", "label": "中文姓名", "type": "text", "group": "申请人基本信息"},
+        {"id": "applicant.family_name", "label": "英文姓 Family Name", "type": "text", "group": "申请人基本信息"},
+        {"id": "applicant.given_name", "label": "英文名 Given Names", "type": "text", "group": "申请人基本信息"},
+        {"id": "applicant.gender", "label": "性别", "type": "select", "options": ["男", "女", "其他"], "group": "申请人基本信息"},
+        {"id": "applicant.dob", "label": "出生日期", "type": "date", "group": "申请人基本信息"},
+        {"id": "applicant.birth_place", "label": "出生地", "type": "text", "group": "申请人基本信息"},
+        {"id": "applicant.nationality", "label": "国籍", "type": "text", "group": "申请人基本信息"},
+        {"id": "applicant.marital", "label": "婚姻状况", "type": "select", "options": ["未婚", "已婚", "离异", "丧偶"], "group": "申请人基本信息"},
+        {"id": "applicant.id_no", "label": "身份证号", "type": "text", "group": "申请人基本信息"},
+        {"id": "applicant.mobile", "label": "手机号码", "type": "tel", "group": "申请人基本信息"},
+        {"id": "applicant.email", "label": "电子邮箱", "type": "email", "group": "申请人基本信息"},
+        {"id": "applicant.address", "label": "常住地址", "type": "textarea", "group": "申请人基本信息"},
+        {"id": "applicant.postcode", "label": "邮政编码", "type": "text", "group": "申请人基本信息"}
+      ]
+    },
+    {
+      "name": "步骤2-护照证件",
+      "page_context": "签证申请向导 Step 2/5：护照与旅行证件",
+      "fields": [
+        {"id": "passport.number", "label": "护照号码", "type": "text", "group": "护照证件"},
+        {"id": "passport.issue_country", "label": "护照签发国", "type": "text", "group": "护照证件"},
+        {"id": "passport.issue_place", "label": "护照签发地", "type": "text", "group": "护照证件"},
+        {"id": "passport.issue_date", "label": "护照签发日期", "type": "date", "group": "护照证件"},
+        {"id": "passport.expiry", "label": "护照有效期至", "type": "date", "group": "护照证件"},
+        {"id": "passport.other_passport", "label": "是否持有其他护照", "type": "radio", "options": ["是", "否"], "group": "护照证件"}
+      ]
+    },
+    {
+      "name": "步骤3-紧急联系人与配偶",
+      "page_context": "签证申请向导 Step 3/5：紧急联系人（注意勿与申请人本人混淆）",
+      "fields": [
+        {"id": "emergency.name", "label": "紧急联系人姓名", "type": "text", "group": "紧急联系人"},
+        {"id": "emergency.relation", "label": "与申请人关系", "type": "select", "options": ["配偶", "父母", "子女", "朋友", "其他"], "group": "紧急联系人"},
+        {"id": "emergency.phone", "label": "紧急联系人电话", "type": "tel", "group": "紧急联系人"},
+        {"id": "emergency.address", "label": "紧急联系人地址", "type": "textarea", "group": "紧急联系人"},
+        {"id": "spouse.name", "label": "配偶姓名", "type": "text", "group": "紧急联系人", "hint": "申请人配偶，不是申请人本人"}
+      ]
+    },
+    {
+      "name": "步骤4-行程住宿机票",
+      "page_context": "签证申请向导 Step 4/5：行程、航班与住宿",
+      "fields": [
+        {"id": "trip.purpose", "label": "访问目的", "type": "select", "options": ["旅游观光", "探亲访友", "商务", "留学", "其他"], "group": "行程计划"},
+        {"id": "trip.destination", "label": "拟入境国家/地区", "type": "text", "group": "行程计划"},
+        {"id": "trip.port", "label": "拟入境口岸", "type": "text", "group": "行程计划"},
+        {"id": "trip.arrival_date", "label": "预计入境日期", "type": "date", "group": "行程计划"},
+        {"id": "trip.departure_date", "label": "预计离境日期", "type": "date", "group": "行程计划"},
+        {"id": "trip.stay_days", "label": "停留天数", "type": "number", "group": "行程计划"},
+        {"id": "trip.has_ticket", "label": "是否已购往返机票", "type": "radio", "options": ["是", "否"], "group": "行程计划"},
+        {"id": "trip.outbound_flight", "label": "出境航班号", "type": "text", "group": "行程计划"},
+        {"id": "trip.inbound_flight", "label": "入境航班号", "type": "text", "group": "行程计划"},
+        {"id": "trip.hotel_name", "label": "住宿名称", "type": "text", "group": "行程计划"},
+        {"id": "trip.hotel_address", "label": "住宿地址", "type": "textarea", "group": "行程计划"},
+        {"id": "trip.visit_friends", "label": "是否访问亲属朋友", "type": "radio", "options": ["是", "否"], "group": "行程计划"}
+      ]
+    },
+    {
+      "name": "步骤5-海关检疫申报",
+      "page_context": "入境卡 / 海关检疫申报 Step 5/5：限制物品与背景声明",
+      "fields": [
+        {"id": "customs.cash_over_limit", "label": "是否携带超过限额的现金或等价物", "type": "radio", "options": ["是", "否"], "group": "海关申报"},
+        {"id": "customs.commercial_goods", "label": "是否携带商业货物样品", "type": "radio", "options": ["是", "否"], "group": "海关申报"},
+        {"id": "customs.food", "label": "是否携带食品、肉类、蛋奶制品", "type": "radio", "options": ["是", "否"], "group": "海关申报"},
+        {"id": "customs.plant", "label": "是否携带植物、种子、土壤", "type": "radio", "options": ["是", "否"], "group": "海关申报"},
+        {"id": "customs.medicine", "label": "是否携带药品（处方药除外个人自用）", "type": "radio", "options": ["是", "否"], "group": "海关申报"},
+        {"id": "customs.farm", "label": "过去30天是否到过农场或接触过活畜", "type": "radio", "options": ["是", "否"], "group": "海关申报"},
+        {"id": "bg.refused_entry", "label": "是否曾被拒绝入境或遣返", "type": "radio", "options": ["是", "否"], "group": "背景声明"},
+        {"id": "bg.criminal", "label": "是否有犯罪记录", "type": "radio", "options": ["是", "否"], "group": "背景声明"},
+        {"id": "customs.notes", "label": "申报备注", "type": "textarea", "group": "海关申报"},
+        {"id": "companion.has_minor", "label": "是否有同行未成年人", "type": "radio", "options": ["是", "否"], "group": "陪同人员"},
+        {"id": "companion.child_name", "label": "同行子女姓名", "type": "text", "group": "陪同人员"},
+        {"id": "companion.child_dob", "label": "同行子女出生日期", "type": "date", "group": "陪同人员"},
+        {"id": "companion.child_passport", "label": "同行子女护照号", "type": "text", "group": "陪同人员"}
+      ]
+    }
+  ]
+}

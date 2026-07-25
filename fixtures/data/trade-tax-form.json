@@ -1,0 +1,27 @@
+{
+  "tax_id": "91310000MA1KXXXX0X",
+  "taxpayer_name": "上海示例进出口有限公司",
+  "tax_office": "3100",
+  "tax_period": "2026-07",
+  "related_customs_no": "220120261234567890",
+  "import_contract_no": "CT-2026-088",
+  "tax_lines": [
+    {
+      "tax_type": "vat",
+      "item_name": "进口货物增值税",
+      "base": 92400,
+      "rate": 13,
+      "amount": 12012
+    },
+    {
+      "tax_type": "excise",
+      "item_name": "不适用",
+      "base": 0,
+      "rate": 0,
+      "amount": 0
+    }
+  ],
+  "handler_name": "赵强",
+  "handler_phone": "021-58880000",
+  "tax_declare": true
+}
