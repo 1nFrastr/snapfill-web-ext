@@ -1,4 +1,11 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import {
+  ClipboardEvent,
+  DragEvent,
+  FormEvent,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import './App.css';
 import {
   AGENT_PORT,
@@ -24,6 +31,10 @@ import {
 import type { AppSettings } from '@/lib/settings/types';
 import { SettingsPanel } from './SettingsPanel';
 import { elapsed, slog, serror } from '@/lib/log';
+
+const FILE_ACCEPT =
+  '.txt,.md,.pdf,.doc,.docx,.csv,.json,text/plain,application/pdf';
+const FILE_EXT_RE = /\.(txt|md|pdf|doc|docx|csv|json)$/i;
 
 type ToolStatus = 'running' | 'done' | 'error';
 
@@ -98,6 +109,46 @@ function formatWhen(s?: string) {
   return s.length > 16 ? s.slice(5, 16) : s;
 }
 
+function isAcceptedFile(file: File) {
+  if (FILE_EXT_RE.test(file.name)) return true;
+  const t = file.type.toLowerCase();
+  return (
+    t === 'text/plain' ||
+    t === 'application/pdf' ||
+    t === 'text/markdown' ||
+    t === 'text/csv' ||
+    t === 'application/json' ||
+    t === 'application/msword' ||
+    t ===
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  );
+}
+
+function filesFromList(list: FileList | File[] | null | undefined): File[] {
+  if (!list) return [];
+  return Array.from(list).filter(isAcceptedFile);
+}
+
+function filesFromDataTransfer(data: DataTransfer | null | undefined): File[] {
+  if (!data) return [];
+  const fromFiles = filesFromList(data.files);
+  if (fromFiles.length > 0) return fromFiles;
+  if (!data.items?.length) return [];
+  const out: File[] = [];
+  for (const item of data.items) {
+    if (item.kind !== 'file') continue;
+    const f = item.getAsFile();
+    if (f && isAcceptedFile(f)) out.push(f);
+  }
+  return out;
+}
+
+type PendingUpload = {
+  id: string;
+  name: string;
+  size: number;
+};
+
 function App() {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL);
   const [input, setInput] = useState('');
@@ -121,9 +172,13 @@ function App() {
   const [kbBusy, setKbBusy] = useState(false);
   const [kbError, setKbError] = useState<string | null>(null);
   const [kbHint, setKbHint] = useState<string | null>(null);
+  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
+  const [dragOver, setDragOver] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const composerFileInputRef = useRef<HTMLInputElement>(null);
+  const dragDepthRef = useRef(0);
   const portRef = useRef<ReturnType<typeof browser.runtime.connect> | null>(
     null,
   );
@@ -256,78 +311,165 @@ function App() {
     await setSelectedKnowledgeIds(next);
   }
 
-  async function handleUpload(file: File) {
+  async function handleUploadFiles(rawFiles: File[]) {
+    const files = filesFromList(rawFiles);
+    if (files.length === 0) {
+      if (rawFiles.length > 0) {
+        setKbError('不支持的文件类型（仅 txt/md/pdf/doc/docx/csv/json）');
+      }
+      return;
+    }
     if (!loggedIn) {
       setLoginOpen(true);
       pushSystem('请先登录再上传知识库文件');
       return;
     }
-    const originalName = file.name;
+
     setKbBusy(true);
     setKbError(null);
-    setKbOpen(true);
-    setKbHint(`正在上传并解析「${originalName}」…`);
+    setKbHint(
+      files.length === 1
+        ? `正在上传并解析「${files[0].name}」…`
+        : `正在上传并解析 ${files.length} 个文件…`,
+    );
+
+    const pending: PendingUpload[] = files.map((f) => ({
+      id: crypto.randomUUID(),
+      name: f.name,
+      size: f.size,
+    }));
+    setPendingUploads((prev) => [...pending, ...prev]);
+
     // 乐观展示：解析完成前也能在列表里看到原名
     setKbFiles((prev) => {
-      if (prev.some((f) => f.id === '__uploading__')) return prev;
-      return [
-        {
-          id: '__uploading__',
-          filename: originalName,
-          file_size: file.size,
+      const extras: KnowledgeFile[] = pending
+        .filter((p) => !prev.some((f) => f.id === `__uploading__:${p.id}`))
+        .map((p) => ({
+          id: `__uploading__:${p.id}`,
+          filename: p.name,
+          file_size: p.size,
           status: 'uploading',
-        },
-        ...prev,
-      ];
+        }));
+      return extras.length ? [...extras, ...prev] : prev;
     });
+
+    let selected = selectedKb;
+    const addedNames: string[] = [];
+    const errors: string[] = [];
+
     try {
-      const result = await uploadKnowledgeFile(file, originalName);
-      const displayName =
-        result.files.find((f) => f.filename)?.filename || originalName;
-      const next = Array.from(new Set([...selectedKb, ...result.fileIds]));
-      setSelectedKb(next);
-      await setSelectedKnowledgeIds(next);
-      const files = await refreshKb(next, { retries: 8 });
-      const found = files.filter((f) => result.fileIds.includes(f.id));
+      for (let i = 0; i < files.length; i += 1) {
+        const file = files[i];
+        const pendingId = pending[i].id;
+        const originalName = file.name;
+        try {
+          const result = await uploadKnowledgeFile(file, originalName);
+          const displayName =
+            result.files.find((f) => f.filename)?.filename || originalName;
+          if (result.fileIds.length === 0) {
+            const msg =
+              result.files.map((f) => f.message).filter(Boolean).join('；') ||
+              '未返回文件 id（可能重名被跳过）';
+            errors.push(`「${displayName}」：${msg}`);
+          } else {
+            selected = Array.from(new Set([...selected, ...result.fileIds]));
+            addedNames.push(displayName);
+          }
+        } catch (e) {
+          if (e instanceof AuthRequiredError) throw e;
+          errors.push(
+            e instanceof Error
+              ? `「${originalName}」上传失败：${e.message}`
+              : String(e),
+          );
+        } finally {
+          setPendingUploads((prev) => prev.filter((p) => p.id !== pendingId));
+          setKbFiles((prev) =>
+            prev.filter((f) => f.id !== `__uploading__:${pendingId}`),
+          );
+        }
+      }
+
+      setSelectedKb(selected);
+      await setSelectedKnowledgeIds(selected);
+      const refreshed = await refreshKb(selected, { retries: 8 });
+      const found = refreshed.filter((f) => selected.includes(f.id));
       setKbHint(null);
-      if (result.fileIds.length === 0) {
-        const msg =
-          result.files.map((f) => f.message).filter(Boolean).join('；') ||
-          '未返回文件 id（可能重名被跳过）';
-        setKbError(`「${displayName}」：${msg}`);
-        pushSystem(`上传「${displayName}」未加入列表：${msg}`);
-      } else if (found.length === 0) {
-        setKbHint(
-          `「${displayName}」已上传（id 已勾选），列表稍后刷新可见。可点「刷新」。`,
-        );
-        pushSystem(
-          `已上传「${displayName}」并勾选。若列表暂未出现，点刷新即可（展示名保留原文件名，非 UUID）。`,
-        );
-      } else {
-        pushSystem(
-          `已添加「${found.map((f) => f.filename).join('、')}」并勾选。`,
-        );
+
+      if (errors.length) setKbError(errors.join('；'));
+      if (addedNames.length) {
+        const visible = found
+          .filter((f) => addedNames.includes(f.filename))
+          .map((f) => f.filename);
+        const names = visible.length ? visible : addedNames;
+        pushSystem(`已添加「${names.join('、')}」并勾选。`);
+      } else if (errors.length) {
+        pushSystem(`上传未完成：${errors.join('；')}`);
       }
     } catch (e) {
-      setKbFiles((prev) => prev.filter((f) => f.id !== '__uploading__'));
+      setPendingUploads([]);
+      setKbFiles((prev) => prev.filter((f) => !f.id.startsWith('__uploading__:')));
       if (e instanceof AuthRequiredError) {
         setLoggedIn(false);
         setUsername(null);
         setLoginOpen(true);
         setKbError('登录已过期，请重新登录');
       } else {
-        setKbError(
-          e instanceof Error
-            ? `「${originalName}」上传失败：${e.message}`
-            : String(e),
-        );
+        setKbError(e instanceof Error ? e.message : String(e));
       }
       setKbHint(null);
     } finally {
       setKbBusy(false);
-      setKbFiles((prev) => prev.filter((f) => f.id !== '__uploading__'));
+      setPendingUploads([]);
+      setKbFiles((prev) => prev.filter((f) => !f.id.startsWith('__uploading__:')));
       if (fileInputRef.current) fileInputRef.current.value = '';
+      if (composerFileInputRef.current) composerFileInputRef.current.value = '';
     }
+  }
+
+  function ingestFiles(files: File[]) {
+    if (files.length === 0) return;
+    void handleUploadFiles(files);
+  }
+
+  function onComposerDragEnter(e: DragEvent) {
+    if (![...e.dataTransfer.types].includes('Files')) return;
+    e.preventDefault();
+    dragDepthRef.current += 1;
+    setDragOver(true);
+  }
+
+  function onComposerDragOver(e: DragEvent) {
+    if (![...e.dataTransfer.types].includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }
+
+  function onComposerDragLeave(e: DragEvent) {
+    if (![...e.dataTransfer.types].includes('Files')) return;
+    e.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setDragOver(false);
+  }
+
+  function onComposerDrop(e: DragEvent) {
+    e.preventDefault();
+    dragDepthRef.current = 0;
+    setDragOver(false);
+    const rawCount = e.dataTransfer.files?.length ?? 0;
+    const dropped = filesFromDataTransfer(e.dataTransfer);
+    if (rawCount > 0 && dropped.length === 0) {
+      setKbError('不支持的文件类型（仅 txt/md/pdf/doc/docx/csv/json）');
+      return;
+    }
+    ingestFiles(dropped);
+  }
+
+  function onComposerPaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const pasted = filesFromDataTransfer(e.clipboardData);
+    if (pasted.length === 0) return;
+    e.preventDefault();
+    ingestFiles(pasted);
   }
 
   function updateAssistant(
@@ -569,6 +711,17 @@ function App() {
       : `知识库：${kbFiles.length} 份可选（未勾选=全部）`
     : '知识库：登录后可用';
 
+  const selectedAttachments = selectedKb
+    .map((id) => kbFiles.find((f) => f.id === id))
+    .filter((f): f is KnowledgeFile => Boolean(f));
+  const orphanSelectedIds = selectedKb.filter(
+    (id) => !kbFiles.some((f) => f.id === id),
+  );
+  const hasAttachments =
+    pendingUploads.length > 0 ||
+    selectedAttachments.length > 0 ||
+    orphanSelectedIds.length > 0;
+
   return (
     <div className="chat">
       <header className="chat__header">
@@ -682,10 +835,11 @@ function App() {
             ref={fileInputRef}
             type="file"
             hidden
-            accept=".txt,.md,.pdf,.doc,.docx,.csv,.json,text/plain,application/pdf"
+            multiple
+            accept={FILE_ACCEPT}
             onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void handleUpload(f);
+              const list = e.target.files;
+              if (list?.length) ingestFiles(Array.from(list));
             }}
           />
         </div>
@@ -719,16 +873,16 @@ function App() {
                 {kbFiles.map((f) => (
                   <li key={f.id}>
                     <label
-                      className={`kb-item${f.id === '__uploading__' ? ' kb-item--pending' : ''}`}
+                      className={`kb-item${f.id.startsWith('__uploading__:') ? ' kb-item--pending' : ''}`}
                     >
                       <input
                         type="checkbox"
                         checked={
-                          f.id === '__uploading__'
+                          f.id.startsWith('__uploading__:')
                             ? true
                             : selectedKb.includes(f.id)
                         }
-                        disabled={f.id === '__uploading__'}
+                        disabled={f.id.startsWith('__uploading__:')}
                         onChange={() => void toggleKb(f.id)}
                       />
                       <span className="kb-item__body">
@@ -834,32 +988,131 @@ function App() {
         ))}
       </div>
 
-      <form className="composer" onSubmit={handleSubmit}>
-        <textarea
-          className="composer__input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              e.currentTarget.form?.requestSubmit();
+      <form
+        className={`composer${dragOver ? ' composer--dragover' : ''}`}
+        onSubmit={handleSubmit}
+        onDragEnter={onComposerDragEnter}
+        onDragOver={onComposerDragOver}
+        onDragLeave={onComposerDragLeave}
+        onDrop={onComposerDrop}
+      >
+        {hasAttachments && (
+          <div className="composer__attachments" aria-label="已选附件">
+            {pendingUploads.map((p) => (
+              <div
+                key={p.id}
+                className="attach-chip attach-chip--pending"
+                title={p.name}
+              >
+                <span className="attach-chip__icon" aria-hidden />
+                <span className="attach-chip__body">
+                  <span className="attach-chip__name">{p.name}</span>
+                  <span className="attach-chip__meta">
+                    上传中… · {formatSize(p.size)}
+                  </span>
+                </span>
+              </div>
+            ))}
+            {selectedAttachments.map((f) => (
+              <div key={f.id} className="attach-chip" title={f.filename}>
+                <span className="attach-chip__icon" aria-hidden />
+                <span className="attach-chip__body">
+                  <span className="attach-chip__name">
+                    {f.filename || '(无文件名)'}
+                  </span>
+                  <span className="attach-chip__meta">
+                    {[formatSize(f.file_size), f.status]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="attach-chip__remove"
+                  aria-label={`移除 ${f.filename}`}
+                  disabled={busy}
+                  onClick={() => void toggleKb(f.id)}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            {orphanSelectedIds.map((id) => (
+              <div key={id} className="attach-chip" title={id}>
+                <span className="attach-chip__icon" aria-hidden />
+                <span className="attach-chip__body">
+                  <span className="attach-chip__name">已选文件</span>
+                  <span className="attach-chip__meta">解析中…</span>
+                </span>
+                <button
+                  type="button"
+                  className="attach-chip__remove"
+                  aria-label="移除附件"
+                  disabled={busy}
+                  onClick={() => void toggleKb(id)}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="composer__row">
+          <button
+            type="button"
+            className="composer__attach"
+            title="添加附件"
+            aria-label="添加附件"
+            disabled={!loggedIn || kbBusy || busy}
+            onClick={() => composerFileInputRef.current?.click()}
+          >
+            +
+          </button>
+          <input
+            ref={composerFileInputRef}
+            type="file"
+            hidden
+            multiple
+            accept={FILE_ACCEPT}
+            onChange={(e) => {
+              const list = e.target.files;
+              if (list?.length) ingestFiles(Array.from(list));
+            }}
+          />
+          <textarea
+            className="composer__input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onPaste={onComposerPaste}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                e.currentTarget.form?.requestSubmit();
+              }
+            }}
+            placeholder={
+              !loggedIn
+                ? '请先登录…'
+                : '描述要填的内容，或拖入/粘贴文件…'
             }
-          }}
-          placeholder={
-            !loggedIn
-              ? '请先登录…'
-              : '描述要填的内容，或直接说「帮我填表」…'
-          }
-          rows={1}
-          disabled={!canRun}
-        />
-        <button
-          className="composer__send"
-          type="submit"
-          disabled={!input.trim() || busy || !canRun}
-        >
-          发送
-        </button>
+            rows={1}
+            disabled={!canRun}
+          />
+          <button
+            className="composer__send"
+            type="submit"
+            disabled={!input.trim() || busy || !canRun}
+          >
+            发送
+          </button>
+        </div>
+
+        {dragOver && (
+          <div className="composer__drop-overlay" aria-hidden>
+            松开以上传材料
+          </div>
+        )}
       </form>
     </div>
   );
