@@ -120,7 +120,7 @@ export async function streamSnapfillAgent(
 ): Promise<RunSnapfillAgentResult> {
   await ensureSettingsLoaded();
   if (!isDeepSeekConfigured()) {
-    throw new Error('未配置 DeepSeek API Key（侧栏设置或 lib/ai/config.ts）');
+    throw new Error('未配置 DeepSeek API Key（侧栏设置或 .env.local）');
   }
 
   const ds = getDeepSeekRuntime();

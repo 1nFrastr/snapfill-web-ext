@@ -1,18 +1,7 @@
-import { deepSeekConfig } from '@/lib/ai/config';
-import { apiConfig } from '@/lib/api/config';
+import { getEnvBuiltinDefaults } from '@/lib/env';
 import type { AppSettings } from '@/lib/settings/types';
 
-/** 内置默认值（来自 lib/ai|api/config.ts；重置时回到这里） */
+/** 内置默认值（dev 来自 .env.local；production 打包不含密钥） */
 export function getBuiltinDefaults(): AppSettings {
-  return {
-    deepSeekApiKey: deepSeekConfig.apiKey,
-    deepSeekBaseUrl: deepSeekConfig.baseUrl,
-    deepSeekModel: deepSeekConfig.model,
-    deepSeekTimeoutMs: deepSeekConfig.timeoutMs ?? 180_000,
-    apiBaseUrl: apiConfig.apiBaseUrl,
-    apiTimeoutMs: apiConfig.timeoutMs ?? 120_000,
-    defaultUsername: apiConfig.username,
-    defaultPassword: apiConfig.password,
-    deviceIdPrefix: apiConfig.deviceIdPrefix ?? 'web-ext',
-  };
+  return getEnvBuiltinDefaults();
 }

@@ -15,6 +15,9 @@ stats-*.json
 web-ext.config.ts
 
 # Local secrets
+.env
+.env.local
+.env.*.local
 lib/ai/config.ts
 lib/api/config.ts
 

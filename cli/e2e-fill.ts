@@ -33,8 +33,8 @@ import {
 } from '../lib/fill/map-fields';
 import { applyFieldValuesToDom } from '../lib/fill/apply';
 import type { FormFieldItem, FormFieldValue } from '../lib/api/types';
-import { apiConfig } from '../lib/api/config';
-import { deepSeekConfig } from '../lib/ai/config';
+import { getEnvBuiltinDefaults } from '../lib/env';
+import { loadEnvFiles } from './lib/load-env';
 import {
   deepSeekProviderBaseUrl,
   isDeepSeekConfigured,
@@ -43,6 +43,9 @@ import { NodeSnapfillApi } from './lib/api-node';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
+loadEnvFiles(ROOT);
+
+const envDefaults = getEnvBuiltinDefaults();
 const FORMS_DIR = join(ROOT, 'fixtures/forms');
 const DEFAULT_KB = join(ROOT, 'fixtures/form_fields/visa_customs/kb.txt');
 
@@ -239,7 +242,7 @@ async function runAgentPipeline(opts: {
   pageHint: string;
 }) {
   if (!isDeepSeekConfigured()) {
-    throw new Error('未配置 deepSeekConfig，无法跑 --agent');
+    throw new Error('未配置 WXT_DEEPSEEK_API_KEY（.env.local），无法跑 --agent');
   }
 
   let locators: FieldLocator[] = [];
@@ -249,8 +252,8 @@ async function runAgentPipeline(opts: {
   let lastFillNonEmpty = 0;
 
   const deepseek = createDeepSeek({
-    apiKey: deepSeekConfig.apiKey,
-    baseURL: deepSeekProviderBaseUrl(),
+    apiKey: envDefaults.deepSeekApiKey,
+    baseURL: deepSeekProviderBaseUrl(envDefaults.deepSeekBaseUrl),
   });
 
   const tools = {
@@ -345,17 +348,17 @@ async function runAgentPipeline(opts: {
   };
 
   const agent = new ToolLoopAgent({
-    model: deepseek(deepSeekConfig.model),
+    model: deepseek(envDefaults.deepSeekModel),
     instructions: `你是 Snapfill 填表 Agent。必须调用工具：extractPageFields → fillFormFields → applyFieldValues。不要编造值。完成后中文短汇报。`,
     tools,
     stopWhen: isStepCount(10),
     temperature: 0.1,
   });
 
-  console.log(`\n=== ToolLoopAgent (${deepSeekConfig.model}) ===`);
+  console.log(`\n=== ToolLoopAgent (${envDefaults.deepSeekModel}) ===`);
   const result = await agent.generate({
     prompt: `请填写当前签证/申报表单。page_hint=${opts.pageHint}`,
-    timeout: { totalMs: Math.max(deepSeekConfig.timeoutMs ?? 180_000, 180_000) },
+    timeout: { totalMs: Math.max(envDefaults.deepSeekTimeoutMs ?? 180_000, 180_000) },
   });
 
   console.log(`steps=${result.steps.length}`);
@@ -388,13 +391,13 @@ async function main() {
   const url = `http://127.0.0.1:4173/${stem}.html`;
 
   console.log(`Snapfill E2E · fixture=${stem}`);
-  console.log(`API ${apiConfig.apiBaseUrl} · agent=${args.agent}`);
+  console.log(`API ${envDefaults.apiBaseUrl} · agent=${args.agent}`);
 
   const api = new NodeSnapfillApi({
-    apiBaseUrl: apiConfig.apiBaseUrl,
-    username: apiConfig.username,
-    password: apiConfig.password,
-    timeoutMs: apiConfig.timeoutMs,
+    apiBaseUrl: envDefaults.apiBaseUrl,
+    username: envDefaults.defaultUsername,
+    password: envDefaults.defaultPassword,
+    timeoutMs: envDefaults.apiTimeoutMs,
   });
 
   console.log('\n=== 1. login ===');

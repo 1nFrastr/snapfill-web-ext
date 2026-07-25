@@ -27,7 +27,11 @@ pnpm fixtures
 
 ## 配置
 
-1. DeepSeek / 后端：侧栏点「设置」填写并保存（持久化到 `browser.storage.local`，可重置）。Base URL 仅可从白名单选择（[`lib/settings/allowlist.ts`](lib/settings/allowlist.ts)，并同步 `wxt.config.ts` 的 `host_permissions`）。也可复制 config.example → `lib/ai/config.ts` / `lib/api/config.ts` 作为内置默认（重置时回退到它们）。
+1. 复制 [`.env.example`](.env.example) → `.env.local`，填写 DeepSeek Key / 后端等（已 gitignore）。
+2. 侧栏「设置」可覆盖并持久化到 `browser.storage.local`（可重置回 env 默认）。
+3. Base URL 仅可从白名单选择（[`lib/settings/allowlist.ts`](lib/settings/allowlist.ts)）。
+
+`pnpm build` / `zip` 会清空密钥类 env，**不会把 `.env.local` 打进扩展产物**；正式使用靠侧栏设置或留空后用户自配。
 
 后端文档：`snapfill-backend/docs/FORM_FIELDS_FILL_API.md`。本地 API 需已启动。
 
@@ -44,7 +48,7 @@ background 经 `runtime.connect` Port 把 `ToolLoopAgent.stream` 的文本增量
 
 ## 端到端填表测试
 
-需本地后端 `http://127.0.0.1:8008` 已启动，且已配置 `lib/api/config.ts`。
+需本地后端已启动，且已配置 `.env.local`（或侧栏设置）。
 
 主用例 HTML 由 `fixtures/form_fields/<case>/fields.json` 生成：
 

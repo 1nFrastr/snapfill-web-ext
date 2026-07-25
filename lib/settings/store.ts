@@ -127,7 +127,7 @@ export async function saveSettings(
   return next;
 }
 
-/** 清除用户覆盖，恢复 config.ts 内置默认 */
+/** 清除用户覆盖，恢复 .env.local / 内置默认 */
 export async function resetSettings(): Promise<AppSettings> {
   ensureListener();
   await browser.storage.local.remove(SETTINGS_STORAGE_KEY);

@@ -79,7 +79,7 @@ export function SettingsPanel({ open, onClose, onSaved }: Props) {
   }
 
   async function handleReset() {
-    if (!confirm('重置为 config.ts 内置默认，并清除本地覆盖？')) return;
+    if (!confirm('重置为 .env.local / 内置默认，并清除本地覆盖？')) return;
     setBusy(true);
     setErr(null);
     setMsg(null);
