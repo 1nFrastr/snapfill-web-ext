@@ -2,7 +2,7 @@
  *  扩展内 console 默认只在各上下文 DevTools 可见；
  *  已通过 `wxt-module-console-forward` 转发到 `pnpm dev` 终端。
  */
-export type LogScope = 'bg' | 'content' | 'sidepanel' | 'ai' | 'cli' | 'agent' | 'api';
+export type LogScope = 'bg' | 'content' | 'sidepanel' | 'ai' | 'cli' | 'agent' | 'api' | 'settings';
 
 function stamp(): string {
   return new Date().toISOString().slice(11, 23);

@@ -101,7 +101,7 @@ export function createSnapfillTools(ctx: AgentToolContext) {
 
     listKnowledgeFiles: tool({
       description:
-        '列出用户已完成解析的知识库文件。可将返回的 id 填入 fillFormFields.knowledge_file_ids；省略 knowledge_file_ids 则使用全部已完成知识库。',
+        '列出用户已完成解析的知识库文件。侧栏勾选的文件会作为 preferred ids 自动传入 fill；一般无需再改 knowledge_file_ids。',
       inputSchema: z.object({
         page: z.number().int().min(1).optional(),
         pageSize: z.number().int().min(1).max(100).optional(),
@@ -155,7 +155,9 @@ export function createSnapfillTools(ctx: AgentToolContext) {
         knowledge_file_ids: z
           .array(z.string())
           .optional()
-          .describe('省略=全部已完成知识库；[]=不使用知识库（需 profile_id）'),
+          .describe(
+            '优先省略：侧栏已勾选时由系统注入；显式传入会覆盖。[]=不使用知识库（需 profile_id）',
+          ),
         page_context: z.string().optional(),
         profile_id: z.string().nullable().optional(),
       }),
@@ -165,7 +167,9 @@ export function createSnapfillTools(ctx: AgentToolContext) {
           throw new Error('没有可填字段，请先调用 extractPageFields');
         }
         const knowledge_file_ids =
-          input.knowledge_file_ids ?? ctx.preferredKnowledgeIds;
+          ctx.preferredKnowledgeIds?.length
+            ? ctx.preferredKnowledgeIds
+            : input.knowledge_file_ids;
         const data = await fillFormFields({
           fields,
           knowledge_file_ids,

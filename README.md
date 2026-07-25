@@ -15,14 +15,19 @@ pnpm dev
 pnpm fixtures
 ```
 
-浏览器打开 `http://localhost:4173/`，点扩展图标打开侧栏，发消息或点「智能填表」。对话中会实时出现工具调用卡片（抽取 → 填值 → 写回）。
+浏览器打开 `http://localhost:4173/`，点扩展图标打开侧栏：
+
+1. **登录**后端账号（表单预填本地联调账号，需点确认）
+2. **勾选 / 上传**知识库材料
+3. 发消息或点「智能填表」
+
+对话中会实时出现工具调用卡片（抽取 → 填值 → 写回）。未勾选知识库时，后端使用账号下全部已解析文件。
 
 日志在 **`pnpm dev` 终端**（`[Snapfill …] [bg|agent|api|content|…]`）。
 
 ## 配置
 
-1. DeepSeek（Agent）：复制 [`lib/ai/config.example.ts`](lib/ai/config.example.ts) → `lib/ai/config.ts`，填写 `deepSeekConfig`。
-2. 后端联调：复制 [`lib/api/config.example.ts`](lib/api/config.example.ts) → `lib/api/config.ts`（默认 `http://127.0.0.1:8008`）。
+1. DeepSeek / 后端：侧栏点「设置」填写并保存（持久化到 `browser.storage.local`，可重置）。Base URL 仅可从白名单选择（[`lib/settings/allowlist.ts`](lib/settings/allowlist.ts)，并同步 `wxt.config.ts` 的 `host_permissions`）。也可复制 config.example → `lib/ai/config.ts` / `lib/api/config.ts` 作为内置默认（重置时回退到它们）。
 
 后端文档：`snapfill-backend/docs/FORM_FIELDS_FILL_API.md`。本地 API 需已启动。
 

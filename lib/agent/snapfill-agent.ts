@@ -1,8 +1,8 @@
 import { ToolLoopAgent, isStepCount } from 'ai';
 import { createDeepSeek } from '@ai-sdk/deepseek';
-import { deepSeekConfig } from '@/lib/ai/config';
 import {
   deepSeekProviderBaseUrl,
+  getDeepSeekRuntime,
   isDeepSeekConfigured,
 } from '@/lib/ai/deepseek';
 import {
@@ -10,21 +10,22 @@ import {
   type AgentToolContext,
 } from '@/lib/agent/tools';
 import type { AgentStreamEvent } from '@/lib/messaging/types';
+import { ensureSettingsLoaded } from '@/lib/settings/store';
 import { elapsed, slog, swarn } from '@/lib/log';
 
 const INSTRUCTIONS = `你是 Snapfill 网页表单填写 Agent。插件侧负责抽 DOM / 回填；后端 form-fields/fill 负责根据知识库生成建议值。
 
 标准流程（必须用工具，不要臆造字段值）：
 1. extractPageFields — 抽取当前页/当前步骤可见字段
-2. （可选）listKnowledgeFiles — 查看可用知识库；用户未指定时通常省略 knowledge_file_ids，让后端用全部已完成知识库
-3. fillFormFields — 把 fields + page_context 交给后端
+2. （可选）listKnowledgeFiles — 查看可用知识库
+3. fillFormFields — 把 fields + page_context 交给后端；若用户已在侧栏勾选知识库，工具会自动带上这些 id，不要改成「全部」或空数组
 4. applyFieldValues — 把返回的 values 写回页面
 
 约束：
 - 不要一次塞超过 80 个字段；大表单可提示用户分步，但当前页仍应尽量完成一轮
 - page_context 要带步骤/页签语义
 - 只信任工具返回；完成后用中文简短汇报：抽取数、写入数、未填、低置信度字段
-- 若抽取 0 字段或后端报错，说明原因并停止`;
+- 若抽取 0 字段或后端报错（含未登录），说明原因并停止`;
 
 export type RunSnapfillAgentInput = {
   tabId: number;
@@ -98,13 +99,14 @@ function summarizeToolResult(toolName: string, output: unknown): unknown {
 }
 
 function createAgent(ctx: AgentToolContext) {
+  const ds = getDeepSeekRuntime();
   const deepseek = createDeepSeek({
-    apiKey: deepSeekConfig.apiKey,
-    baseURL: deepSeekProviderBaseUrl(),
+    apiKey: ds.apiKey,
+    baseURL: deepSeekProviderBaseUrl(ds.baseUrl),
   });
 
   return new ToolLoopAgent({
-    model: deepseek(deepSeekConfig.model),
+    model: deepseek(ds.model),
     instructions: INSTRUCTIONS,
     tools: createSnapfillTools(ctx),
     stopWhen: isStepCount(12),
@@ -116,10 +118,12 @@ function createAgent(ctx: AgentToolContext) {
 export async function streamSnapfillAgent(
   input: RunSnapfillAgentInput,
 ): Promise<RunSnapfillAgentResult> {
+  await ensureSettingsLoaded();
   if (!isDeepSeekConfigured()) {
-    throw new Error('未配置 DeepSeek API Key（lib/ai/config.ts → deepSeekConfig）');
+    throw new Error('未配置 DeepSeek API Key（侧栏设置或 lib/ai/config.ts）');
   }
 
+  const ds = getDeepSeekRuntime();
   const started = Date.now();
   const emit = (event: AgentStreamEvent) => input.onEvent?.(event);
   const ctx: AgentToolContext = {
@@ -137,15 +141,15 @@ export async function streamSnapfillAgent(
 
   slog(
     'agent',
-    `ToolLoopAgent.stream 开始 tab=${input.tabId} model=${deepSeekConfig.model}`,
+    `ToolLoopAgent.stream 开始 tab=${input.tabId} model=${ds.model}`,
   );
-  emit({ type: 'started', model: deepSeekConfig.model });
+  emit({ type: 'started', model: ds.model });
 
   const result = await agent.stream({
     prompt: userPrompt,
     abortSignal: input.abortSignal,
     timeout: {
-      totalMs: Math.max(deepSeekConfig.timeoutMs ?? 180_000, 180_000),
+      totalMs: Math.max(ds.timeoutMs ?? 180_000, 180_000),
     },
   });
 

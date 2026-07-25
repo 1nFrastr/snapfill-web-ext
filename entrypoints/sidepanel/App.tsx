@@ -6,7 +6,23 @@ import {
   type AgentStreamEvent,
 } from '@/lib/messaging/types';
 import { isDeepSeekConfigured } from '@/lib/ai/deepseek';
-import { deepSeekConfig } from '@/lib/ai/config';
+import {
+  AuthRequiredError,
+  getAuthStatus,
+  getSelectedKnowledgeIds,
+  listKnowledgeFiles,
+  logout,
+  passwordLogin,
+  setSelectedKnowledgeIds,
+  uploadKnowledgeFile,
+} from '@/lib/api/client';
+import type { KnowledgeFile } from '@/lib/api/types';
+import {
+  ensureSettingsLoaded,
+  getSettings,
+} from '@/lib/settings/store';
+import type { AppSettings } from '@/lib/settings/types';
+import { SettingsPanel } from './SettingsPanel';
 import { elapsed, slog, serror } from '@/lib/log';
 
 type ToolStatus = 'running' | 'done' | 'error';
@@ -49,7 +65,7 @@ const INITIAL: ChatMessage[] = [
     parts: [
       {
         kind: 'text',
-        text: '你好，我是 Snapfill。在待填页面打开侧栏，直接说「帮我填表」或描述要填的步骤；我会流式展示工具调用并写回页面。',
+        text: '你好，我是 Snapfill。请先登录并勾选知识库材料，再在待填页面说「帮我填表」；我会流式展示工具调用并写回页面。',
       },
     ],
   },
@@ -69,18 +85,58 @@ function previewJson(value: unknown, max = 280): string {
   }
 }
 
+function formatSize(n?: number) {
+  if (n == null || !Number.isFinite(n)) return '';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatWhen(s?: string) {
+  if (!s) return '';
+  // 后端多为 "YYYY-MM-DD HH:mm:ss"
+  return s.length > 16 ? s.slice(5, 16) : s;
+}
+
 function App() {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
-  const [model, setModel] = useState(deepSeekConfig.model);
+  const [model, setModel] = useState('');
+  const [settingsReady, setSettingsReady] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [agentReady, setAgentReady] = useState(false);
+
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const [kbOpen, setKbOpen] = useState(false);
+  const [kbFiles, setKbFiles] = useState<KnowledgeFile[]>([]);
+  const [selectedKb, setSelectedKb] = useState<string[]>([]);
+  const [kbBusy, setKbBusy] = useState(false);
+  const [kbError, setKbError] = useState<string | null>(null);
+  const [kbHint, setKbHint] = useState<string | null>(null);
+
   const listRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const portRef = useRef<ReturnType<typeof browser.runtime.connect> | null>(
     null,
   );
   const assistantIdRef = useRef<string | null>(null);
   const onEventRef = useRef<(event: AgentStreamEvent) => void>(() => undefined);
-  const agentReady = isDeepSeekConfigured();
+  const canRun = agentReady && loggedIn;
+
+  function applySettingsToUi(s: AppSettings) {
+    setModel(s.deepSeekModel);
+    setLoginUser(s.defaultUsername);
+    setLoginPass(s.defaultPassword);
+    setAgentReady(isDeepSeekConfigured());
+  }
 
   useEffect(() => {
     const el = listRef.current;
@@ -94,6 +150,185 @@ function App() {
       portRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const settings = await ensureSettingsLoaded();
+        applySettingsToUi(settings);
+        setSettingsReady(true);
+
+        const status = await getAuthStatus();
+        setLoggedIn(status.loggedIn);
+        setUsername(status.username);
+        if (!status.loggedIn) setLoginOpen(true);
+        const ids = await getSelectedKnowledgeIds();
+        setSelectedKb(ids);
+        if (status.loggedIn) {
+          await refreshKb(ids);
+        }
+      } catch (e) {
+        serror('sidepanel', '初始化会话失败', e);
+        setSettingsReady(true);
+      }
+    })();
+    // refreshKb is stable enough for mount-only init
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function refreshKb(preferIds?: string[], opts?: { retries?: number }) {
+    setKbError(null);
+    const retries = opts?.retries ?? 0;
+    try {
+      let files = await listKnowledgeFiles({ pageSize: 50, status: 'complete' });
+      const want = preferIds?.filter(Boolean) ?? [];
+      for (let i = 0; i < retries && want.length > 0; i += 1) {
+        const have = new Set(files.map((f) => f.id));
+        if (want.every((id) => have.has(id))) break;
+        await new Promise((r) => setTimeout(r, 1500));
+        files = await listKnowledgeFiles({ pageSize: 50, status: 'complete' });
+      }
+      setKbFiles(files);
+      const valid = new Set(files.map((f) => f.id));
+      const current = preferIds ?? selectedKb;
+      const next = current.filter((id) => valid.has(id));
+      setSelectedKb(next);
+      await setSelectedKnowledgeIds(next);
+      return files;
+    } catch (e) {
+      if (e instanceof AuthRequiredError) {
+        setLoggedIn(false);
+        setUsername(null);
+        setLoginOpen(true);
+        setKbError('登录已过期，请重新登录');
+        return [];
+      }
+      setKbError(e instanceof Error ? e.message : String(e));
+      return [];
+    }
+  }
+
+  function pushSystem(text: string) {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        parts: [{ kind: 'text', text }],
+      },
+    ]);
+  }
+
+  async function handleLogin(event: FormEvent) {
+    event.preventDefault();
+    setAuthBusy(true);
+    setAuthError(null);
+    try {
+      await passwordLogin(loginUser.trim(), loginPass);
+      setLoggedIn(true);
+      setUsername(loginUser.trim());
+      setLoginOpen(false);
+      setLoginPass('');
+      pushSystem(`已登录为 ${loginUser.trim()}`);
+      await refreshKb();
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleLogout() {
+    await logout();
+    setLoggedIn(false);
+    setUsername(null);
+    setKbFiles([]);
+    setLoginOpen(true);
+    setKbOpen(false);
+    pushSystem('已退出登录');
+  }
+
+  async function toggleKb(id: string) {
+    const next = selectedKb.includes(id)
+      ? selectedKb.filter((x) => x !== id)
+      : [...selectedKb, id];
+    setSelectedKb(next);
+    await setSelectedKnowledgeIds(next);
+  }
+
+  async function handleUpload(file: File) {
+    if (!loggedIn) {
+      setLoginOpen(true);
+      pushSystem('请先登录再上传知识库文件');
+      return;
+    }
+    const originalName = file.name;
+    setKbBusy(true);
+    setKbError(null);
+    setKbOpen(true);
+    setKbHint(`正在上传并解析「${originalName}」…`);
+    // 乐观展示：解析完成前也能在列表里看到原名
+    setKbFiles((prev) => {
+      if (prev.some((f) => f.id === '__uploading__')) return prev;
+      return [
+        {
+          id: '__uploading__',
+          filename: originalName,
+          file_size: file.size,
+          status: 'uploading',
+        },
+        ...prev,
+      ];
+    });
+    try {
+      const result = await uploadKnowledgeFile(file, originalName);
+      const displayName =
+        result.files.find((f) => f.filename)?.filename || originalName;
+      const next = Array.from(new Set([...selectedKb, ...result.fileIds]));
+      setSelectedKb(next);
+      await setSelectedKnowledgeIds(next);
+      const files = await refreshKb(next, { retries: 8 });
+      const found = files.filter((f) => result.fileIds.includes(f.id));
+      setKbHint(null);
+      if (result.fileIds.length === 0) {
+        const msg =
+          result.files.map((f) => f.message).filter(Boolean).join('；') ||
+          '未返回文件 id（可能重名被跳过）';
+        setKbError(`「${displayName}」：${msg}`);
+        pushSystem(`上传「${displayName}」未加入列表：${msg}`);
+      } else if (found.length === 0) {
+        setKbHint(
+          `「${displayName}」已上传（id 已勾选），列表稍后刷新可见。可点「刷新」。`,
+        );
+        pushSystem(
+          `已上传「${displayName}」并勾选。若列表暂未出现，点刷新即可（展示名保留原文件名，非 UUID）。`,
+        );
+      } else {
+        pushSystem(
+          `已添加「${found.map((f) => f.filename).join('、')}」并勾选。`,
+        );
+      }
+    } catch (e) {
+      setKbFiles((prev) => prev.filter((f) => f.id !== '__uploading__'));
+      if (e instanceof AuthRequiredError) {
+        setLoggedIn(false);
+        setUsername(null);
+        setLoginOpen(true);
+        setKbError('登录已过期，请重新登录');
+      } else {
+        setKbError(
+          e instanceof Error
+            ? `「${originalName}」上传失败：${e.message}`
+            : String(e),
+        );
+      }
+      setKbHint(null);
+    } finally {
+      setKbBusy(false);
+      setKbFiles((prev) => prev.filter((f) => f.id !== '__uploading__'));
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
 
   function updateAssistant(
     id: string,
@@ -167,6 +402,14 @@ function App() {
               : p,
           ),
         );
+        if (
+          event.error.includes('请先登录') ||
+          event.error.includes('登录已过期')
+        ) {
+          setLoggedIn(false);
+          setUsername(null);
+          setLoginOpen(true);
+        }
         break;
       case 'done':
         updateAssistant(
@@ -192,6 +435,14 @@ function App() {
           ],
           { streaming: false },
         );
+        if (
+          event.error.includes('请先登录') ||
+          event.error.includes('登录已过期')
+        ) {
+          setLoggedIn(false);
+          setUsername(null);
+          setLoginOpen(true);
+        }
         setBusy(false);
         assistantIdRef.current = null;
         break;
@@ -243,20 +494,15 @@ function App() {
   function handleSend(prompt: string) {
     const text = prompt.trim();
     if (!text || busy) return;
+
     if (!agentReady) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          parts: [
-            {
-              kind: 'text',
-              text: '请配置 DeepSeek API Key（lib/ai/config.ts → deepSeekConfig）。',
-            },
-          ],
-        },
-      ]);
+      pushSystem('请在「设置」中填写 DeepSeek API Key。');
+      setSettingsOpen(true);
+      return;
+    }
+    if (!loggedIn) {
+      setLoginOpen(true);
+      pushSystem('请先登录后再填表。');
       return;
     }
 
@@ -265,9 +511,18 @@ function App() {
     setBusy(true);
     const started = Date.now();
 
+    const kbNote =
+      selectedKb.length > 0
+        ? `（已选 ${selectedKb.length} 份知识库）`
+        : '（未勾选知识库 → 使用账号下全部已解析文件）';
+
     setMessages((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), role: 'user', parts: [{ kind: 'text', text }] },
+      {
+        id: crypto.randomUUID(),
+        role: 'user',
+        parts: [{ kind: 'text', text: `${text}\n${kbNote}` }],
+      },
       {
         id: assistantId,
         role: 'assistant',
@@ -276,9 +531,13 @@ function App() {
       },
     ]);
 
-    slog('sidepanel', `Agent 流式开始 prompt=${text.slice(0, 80)}`);
+    slog('sidepanel', `Agent 流式开始 prompt=${text.slice(0, 80)} kb=${selectedKb.length}`);
     try {
-      sendToAgent({ type: 'start', prompt: text });
+      sendToAgent({
+        type: 'start',
+        prompt: text,
+        knowledgeFileIds: selectedKb.length > 0 ? selectedKb : undefined,
+      });
     } catch (e) {
       serror('sidepanel', `连接 background 失败 ${elapsed(started)}`, e);
       updateAssistant(
@@ -304,17 +563,204 @@ function App() {
     handleSend(text);
   }
 
+  const kbSummary = loggedIn
+    ? selectedKb.length > 0
+      ? `知识库：已选 ${selectedKb.length} 份`
+      : `知识库：${kbFiles.length} 份可选（未勾选=全部）`
+    : '知识库：登录后可用';
+
   return (
     <div className="chat">
       <header className="chat__header">
-        <div className="chat__brand">Snapfill</div>
-        <p className="chat__slogan">Agent 填表 · 流式工具调用</p>
+        <div className="chat__top">
+          <div>
+            <div className="chat__brand">Snapfill</div>
+            <p className="chat__slogan">Agent 填表 · 流式工具调用</p>
+          </div>
+          <div className="chat__session">
+            <button
+              type="button"
+              className="action action--ghost action--sm"
+              onClick={() => setSettingsOpen((v) => !v)}
+            >
+              设置
+            </button>
+            {loggedIn ? (
+              <>
+                <span className="session__user" title={username ?? ''}>
+                  {username}
+                </span>
+                <button
+                  type="button"
+                  className="action action--ghost action--sm"
+                  onClick={() => void handleLogout()}
+                >
+                  退出
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="action action--sm"
+                onClick={() => setLoginOpen((v) => !v)}
+              >
+                登录
+              </button>
+            )}
+          </div>
+        </div>
+
+        <SettingsPanel
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={(s) => {
+            applySettingsToUi(s);
+            pushSystem(
+              `设置已更新：API ${s.apiBaseUrl} · DeepSeek ${s.deepSeekModel}`,
+            );
+          }}
+        />
+
+        {loginOpen && !loggedIn && (
+          <form className="session-panel" onSubmit={(e) => void handleLogin(e)}>
+            <label className="field">
+              <span>账号</span>
+              <input
+                value={loginUser}
+                onChange={(e) => setLoginUser(e.target.value)}
+                autoComplete="username"
+                required
+              />
+            </label>
+            <label className="field">
+              <span>密码</span>
+              <input
+                type="password"
+                value={loginPass}
+                onChange={(e) => setLoginPass(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </label>
+            {authError && <p className="session-panel__error">{authError}</p>}
+            <button
+              type="submit"
+              className="action"
+              disabled={authBusy || !loginUser.trim() || !loginPass}
+            >
+              {authBusy ? '登录中…' : '确认登录'}
+            </button>
+          </form>
+        )}
+
+        <div className="chat__kbbar">
+          <button
+            type="button"
+            className="kbbar__toggle"
+            onClick={() => {
+              if (!loggedIn) {
+                setLoginOpen(true);
+                return;
+              }
+              setKbOpen((v) => !v);
+              if (!kbOpen) void refreshKb();
+            }}
+            disabled={!loggedIn}
+          >
+            {kbSummary}
+            <span aria-hidden>{kbOpen ? '▾' : '▸'}</span>
+          </button>
+          <button
+            type="button"
+            className="action action--ghost action--sm"
+            disabled={!loggedIn || kbBusy}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {kbBusy ? '上传中…' : '上传'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            hidden
+            accept=".txt,.md,.pdf,.doc,.docx,.csv,.json,text/plain,application/pdf"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleUpload(f);
+            }}
+          />
+        </div>
+
+        {(kbHint || kbError) && (
+          <div className="kb-status" role="status">
+            {kbHint && <p className="kb-panel__hint">{kbHint}</p>}
+            {kbError && <p className="session-panel__error">{kbError}</p>}
+          </div>
+        )}
+
+        {kbOpen && loggedIn && (
+          <div className="kb-panel">
+            <div className="kb-panel__head">
+              <span className="kb-panel__title">
+                已解析文件（显示原文件名）
+              </span>
+              <button
+                type="button"
+                className="action action--ghost action--sm"
+                disabled={kbBusy}
+                onClick={() => void refreshKb(selectedKb)}
+              >
+                刷新
+              </button>
+            </div>
+            {kbFiles.length === 0 ? (
+              <p className="kb-panel__empty">暂无已解析文件，请先上传材料。</p>
+            ) : (
+              <ul className="kb-list">
+                {kbFiles.map((f) => (
+                  <li key={f.id}>
+                    <label
+                      className={`kb-item${f.id === '__uploading__' ? ' kb-item--pending' : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={
+                          f.id === '__uploading__'
+                            ? true
+                            : selectedKb.includes(f.id)
+                        }
+                        disabled={f.id === '__uploading__'}
+                        onChange={() => void toggleKb(f.id)}
+                      />
+                      <span className="kb-item__body">
+                        <span className="kb-item__name" title={f.filename}>
+                          {f.filename || '(无文件名)'}
+                        </span>
+                        <span className="kb-item__meta">
+                          {[
+                            formatSize(f.file_size),
+                            formatWhen(f.created_at),
+                            f.status === 'uploading'
+                              ? '上传/解析中'
+                              : f.status,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         <div className="chat__actions">
           <button
             type="button"
             className="action"
             onClick={() => handleSend('请填写当前页可见表单')}
-            disabled={busy || !agentReady}
+            disabled={busy || !canRun}
           >
             {busy ? '运行中…' : '智能填表'}
           </button>
@@ -329,9 +775,13 @@ function App() {
           )}
         </div>
         <p className="chat__stats">
-          {agentReady
-            ? `DeepSeek · ${model}`
-            : '未配置 DeepSeek — 无法启动 Agent'}
+          {!settingsReady
+            ? '加载设置…'
+            : !agentReady
+              ? '未配置 DeepSeek — 打开「设置」填写 API Key'
+              : !loggedIn
+                ? '未登录 — 请先登录后端账号'
+                : `DeepSeek · ${model} · ${getSettings().apiBaseUrl}`}
         </p>
       </header>
 
@@ -395,14 +845,18 @@ function App() {
               e.currentTarget.form?.requestSubmit();
             }
           }}
-          placeholder="描述要填的内容，或直接说「帮我填表」…"
+          placeholder={
+            !loggedIn
+              ? '请先登录…'
+              : '描述要填的内容，或直接说「帮我填表」…'
+          }
           rows={1}
-          disabled={!agentReady}
+          disabled={!canRun}
         />
         <button
           className="composer__send"
           type="submit"
-          disabled={!input.trim() || busy || !agentReady}
+          disabled={!input.trim() || busy || !canRun}
         >
           发送
         </button>

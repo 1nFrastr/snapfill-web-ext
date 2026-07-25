@@ -13,6 +13,13 @@
   animation: header-in 420ms ease-out;
 }
 
+.chat__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .chat__brand {
   font-size: 1.35rem;
   font-weight: 700;
@@ -24,6 +31,245 @@
   margin: 6px 0 0;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.chat__session {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.session__user {
+  max-width: 7.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.session-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--input-bg) 88%, transparent);
+}
+
+.settings-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--input-bg) 88%, transparent);
+  max-height: 52vh;
+  overflow: auto;
+}
+
+.settings-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.settings-panel__title {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.settings-group {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.settings-group legend {
+  padding: 0 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.settings-panel__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.settings-panel__ok {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #15803d;
+  line-height: 1.35;
+}
+
+.settings-panel__hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.settings-panel__hint code {
+  font-size: 0.7rem;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.field input,
+.field select {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.field select {
+  cursor: pointer;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.session-panel__error {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #dc2626;
+  line-height: 1.35;
+}
+
+.chat__kbbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.kbbar__toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kbbar__toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.kb-status {
+  margin-top: 8px;
+}
+
+.kb-panel {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--input-bg) 88%, transparent);
+  max-height: 220px;
+  overflow: auto;
+}
+
+.kb-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.kb-panel__title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.kb-panel__hint,
+.kb-panel__empty {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.kb-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.kb-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.kb-item:hover {
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+}
+
+.kb-item--pending {
+  opacity: 0.75;
+  cursor: default;
+}
+
+.kb-item__body {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.kb-item__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.kb-item__meta {
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
 .chat__actions {
@@ -54,6 +300,11 @@
   background: transparent;
   color: var(--ink);
   border: 1px solid var(--line);
+}
+
+.action--sm {
+  padding: 6px 10px;
+  font-size: 0.78rem;
 }
 
 .chat__stats {

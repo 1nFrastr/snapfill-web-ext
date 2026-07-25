@@ -4,6 +4,7 @@ import {
   type AgentStreamEvent,
 } from '@/lib/messaging/types';
 import { streamSnapfillAgent } from '@/lib/agent/snapfill-agent';
+import { ensureSettingsLoaded } from '@/lib/settings/store';
 import { elapsed, serror, slog } from '@/lib/log';
 
 async function getActiveTabId(explicit?: number): Promise<number> {
@@ -40,6 +41,7 @@ function post(
 
 export default defineBackground(() => {
   slog('bg', 'background 已启动。流式 ToolLoopAgent 经 Port 推送到侧栏。');
+  void ensureSettingsLoaded();
 
   browser.sidePanel
     .setPanelBehavior({ openPanelOnActionClick: true })
