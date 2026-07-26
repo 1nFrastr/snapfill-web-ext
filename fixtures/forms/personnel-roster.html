@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <title>项目组人员备案表 — 仿真</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --ink: #1d2733;
+      --muted: #64748b;
+      --line: #cbd5e1;
+      --bg: #eef2f6;
+      --panel: #fff;
+      --th-bg: #f1f5f9;
+      --accent: #1d4ed8;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ink: #e2e8f0;
+        --muted: #94a3b8;
+        --line: #334155;
+        --bg: #0f172a;
+        --panel: #1e293b;
+        --th-bg: #263449;
+        --accent: #60a5fa;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "PingFang SC", "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+    .topbar { background: #0f2f5c; color: #fff; padding: 10px 16px; display: flex; gap: 14px; align-items: center; }
+    .topbar input { padding: 5px 8px; }
+    main { max-width: 940px; margin: 20px auto; background: var(--panel); border: 1px solid var(--line); padding: 20px; }
+    h1 { font-size: 20px; margin: 0 0 16px; }
+    fieldset { border: 1px solid var(--line); margin: 0 0 16px; padding: 12px 14px; }
+    legend { font-weight: 600; padding: 0 6px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    label { font-size: 13px; color: var(--muted); }
+    input, select, textarea { padding: 5px 7px; font: inherit; border: 1px solid var(--line); background: transparent; color: inherit; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+    th, td { border: 1px solid var(--line); padding: 5px 6px; font-size: 13px; }
+    thead th { background: var(--th-bg); }
+    td input, td select { width: 100%; }
+    tr.template-row { display: none; }
+    button { padding: 6px 12px; font: inherit; cursor: pointer; border: 1px solid var(--line); background: transparent; color: inherit; }
+    button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    dialog { border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 18px; min-width: 420px; }
+    dialog::backdrop { background: rgb(15 23 42 / 45%); }
+    #overseas_block[hidden] { display: none; }
+    footer { margin-top: 18px; padding: 14px; background: var(--th-bg); }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <strong>人员备案系统 · 仿真</strong>
+    <form action="#"><input type="search" name="site_keyword" placeholder="站内搜索"/></form>
+  </header>
+
+  <main>
+    <h1>项目组人员备案表</h1>
+    <form id="roster-main">
+      <fieldset>
+        <legend>项目基本信息</legend>
+        <div class="grid">
+          <div class="field"><label for="project_name">项目名称</label><input id="project_name" name="project_name" required/></div>
+          <div class="field"><label for="project_code">项目编号</label><input id="project_code" name="project_code"/></div>
+          <div class="field"><label for="undertaker">承担单位</label><input id="undertaker" name="undertaker"/></div>
+          <div class="field"><label for="period">执行周期</label><input id="period" name="period" placeholder="如：2026.01-2026.12"/></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>项目组成员</legend>
+        <table id="members-table">
+          <thead>
+            <tr><th>姓名</th><th>证件类型</th><th>证件号码</th><th>岗位</th><th>联系电话</th></tr>
+          </thead>
+          <tbody id="members-body">
+            <tr>
+              <td><input name="members[0].name"/></td>
+              <td>
+                <select name="members[0].id_type">
+                  <option value="id_card">居民身份证</option>
+                  <option value="passport">护照</option>
+                </select>
+              </td>
+              <td><input name="members[0].id_no"/></td>
+              <td><input name="members[0].role"/></td>
+              <td><input name="members[0].phone"/></td>
+            </tr>
+            <tr class="template-row">
+              <td><input name="members[__i__].name"/></td>
+              <td>
+                <select name="members[__i__].id_type">
+                  <option value="id_card">居民身份证</option>
+                  <option value="passport">护照</option>
+                </select>
+              </td>
+              <td><input name="members[__i__].id_no"/></td>
+              <td><input name="members[__i__].role"/></td>
+              <td><input name="members[__i__].phone"/></td>
+            </tr>
+          </tbody>
+        </table>
+        <button type="button" id="add-member">＋ 添加成员</button>
+      </fieldset>
+
+      <fieldset>
+        <legend>紧急联系人</legend>
+        <p id="emergency-summary">尚未添加紧急联系人。</p>
+        <button type="button" id="open-emergency">新增紧急联系人</button>
+      </fieldset>
+
+      <fieldset>
+        <legend>境外人员情况</legend>
+        <div class="field">
+          <span>本项目组是否含境外人员</span>
+          <label><input type="radio" name="has_overseas" value="是"/> 是</label>
+          <label><input type="radio" name="has_overseas" value="否" checked/> 否</label>
+        </div>
+        <div id="overseas_block" hidden>
+          <div class="grid">
+            <div class="field"><label for="overseas_count">境外人员人数</label><input id="overseas_count" name="overseas_count" type="number"/></div>
+            <div class="field"><label for="overseas_country">主要来源国家/地区</label><input id="overseas_country" name="overseas_country"/></div>
+            <div class="field"><label for="overseas_approval">涉外审批文号</label><input id="overseas_approval" name="overseas_approval"/></div>
+            <div class="field"><label for="overseas_remark">备注说明</label><textarea id="overseas_remark" name="overseas_remark" rows="2"></textarea></div>
+          </div>
+        </div>
+      </fieldset>
+
+      <button type="submit" class="primary">提交备案</button>
+    </form>
+  </main>
+
+  <dialog id="emergency-dialog">
+    <h2>紧急联系人信息</h2>
+    <div class="grid">
+      <div class="field"><label for="ec_name">联系人姓名</label><input id="ec_name" name="emergency.name"/></div>
+      <div class="field"><label for="ec_relation">与本人关系</label><input id="ec_relation" name="emergency.relation"/></div>
+      <div class="field"><label for="ec_phone">联系电话</label><input id="ec_phone" name="emergency.phone"/></div>
+      <div class="field"><label for="ec_address">通讯地址</label><input id="ec_address" name="emergency.address"/></div>
+    </div>
+    <button type="button" id="close-emergency">确定</button>
+  </dialog>
+
+  <footer>
+    <form><label>订阅政策通知</label><input type="email" name="newsletter_email" placeholder="email@example.com"/></form>
+  </footer>
+
+  <script>
+    let memberIndex = 1;
+    document.getElementById('add-member').addEventListener('click', () => {
+      const tpl = document.querySelector('#members-body tr.template-row');
+      const row = tpl.cloneNode(true);
+      row.classList.remove('template-row');
+      for (const el of row.querySelectorAll('[name]')) {
+        el.setAttribute('name', el.getAttribute('name').replace('__i__', String(memberIndex)));
+      }
+      tpl.parentNode.insertBefore(row, tpl);
+      memberIndex += 1;
+    });
+
+    const dialog = document.getElementById('emergency-dialog');
+    document.getElementById('open-emergency').addEventListener('click', () => dialog.showModal());
+    document.getElementById('close-emergency').addEventListener('click', () => dialog.close());
+
+    for (const radio of document.querySelectorAll('input[name="has_overseas"]')) {
+      radio.addEventListener('change', (e) => {
+        document.getElementById('overseas_block').hidden = e.target.value !== '是';
+      });
+    }
+  </script>
+</body>
+</html>
