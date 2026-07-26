@@ -2,6 +2,9 @@
 
 对话式表单填写助手：侧栏流式展示 Agent 工具调用；插件抽 DOM / 回填；后端知识库填值；Vercel AI SDK `ToolLoopAgent` 编排。
 
+**职责边界**：插件只做浏览器物理上独占的事（DOM 遍历、shadow 穿透、交互探索、坐标测量、回填校验）；
+语义判断（区域分类、query 生成、检索、填值）全部在后端。Agent 不构造字段清单，也不经手具体的值。
+
 ## 开发
 
 ```bash
@@ -21,7 +24,7 @@ pnpm fixtures
 2. **勾选 / 上传**知识库材料
 3. 发消息或点「智能填表」
 
-对话中会实时出现工具调用卡片（抽取 → 填值 → 写回）。未勾选知识库时，后端使用账号下全部已解析文件。
+对话中会实时出现工具调用卡片（抽取 → 交互探索 → 提交 → 写回）。未勾选知识库时，后端使用账号下全部已解析文件。
 
 日志在 **`pnpm dev` 终端**（`[Snapfill …] [bg|agent|api|content|…]`）。
 
@@ -38,26 +41,36 @@ pnpm fixtures
 ## 智能填表流程
 
 ```
-extractPageFields（content 扫 DOM）
-  → listKnowledgeFiles（可选）
-  → fillFormFields（POST /Table/form-fields/fill）
-  → applyFieldValues（写回控件）
+感知  probeFrames / snapshotForm / describeRegion / readElementDetail
+行动  activate / openOptions（内建导航守卫、预算上限、危险按钮黑名单）
+观察  getExtractionReport（覆盖率 / 标签置信率 / 低置信控件清单）
+提交  commitFormGraph（事实层 controls+texts+structure → POST /Table/form-regions/fill）
+回填  applyValues（按 frameId 定向写回 + 回读校验 verified/reverted/mismatch）
 ```
 
 background 经 `runtime.connect` Port 把 `ToolLoopAgent.stream` 的文本增量与工具事件推到侧栏。
 
-## 端到端填表测试
+分工：**点不点、按什么顺序点、哪个面板该跳过、什么时候收敛**归 Agent；
+**这次快照属于哪个面板、抽过哪些、激活过哪些**归代码。FormGraph 的累积粒度是 `(frameId, panelKey)`
+而非 frameId——切 tab 会移除上一个面板的 DOM，按 frame 覆盖会把先前抽到的字段静默抹掉。
+`snapshotForm` 返回 `panelsPending` 告诉 Agent 还剩哪些面板没抽。
 
-需本地后端已启动，且已配置 `.env.local`（或侧栏设置）。
+## 抽取产物（可观测性）
 
-主用例 HTML 由 `fixtures/form_fields/<case>/fields.json` 生成：
+`FieldNode.controlNo` 是阅读顺序编号，既画在截图上、又是映射表主键——肉眼对一遍编号
+就能判断"控件 ↔ 题干"配没配对（做法沿用 PDF 实验的 SoM 编号）。
+
+离线 harness（真实 Chrome、整页截图，推荐）：
 
 ```bash
-pnpm gen:forms                # 生成 visa_customs / gov_project HTML
-pnpm e2e                      # 默认 visa_customs：扫 DOM → fill → 写回
-pnpm e2e --fresh-kb           # 上传同目录 kb.txt 再填
-pnpm e2e gov_project --kb fixtures/form_fields/gov_project/kb.txt --fresh-kb
-pnpm e2e:agent
+pnpm trace                     # 全部 fixture
+pnpm trace personnel           # 只跑文件名匹配的
+pnpm trace --probe             # 复刻 Agent 探索循环：逐个激活 → 重抽 → 累加
+pnpm trace --url https://...   # 抽真实站点
 ```
 
-产物：`output/e2e/<fixture>.fields.json`、`.result.json`。
+产物：`output/trace/<name>/{form_graph.json, controls.md, overlay.png}`。summary 里的
+`panels:` 行标出哪些面板还「未抽取」，`dropped:` 直方图区分"正确忽略的噪声"和"误杀的字段"。
+
+运行时：每轮 Agent 结束自动抓一份存进 `storage.local`，侧栏「导出抽取产物」下载同样的三件套
+（截图受 `captureVisibleTab` 限制只有可视区，整页请用 harness）。

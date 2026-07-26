@@ -1,4 +1,4 @@
-/** CSS.escape polyfill（jsdom / 旧环境可能没有） */
+/** CSS.escape polyfill（旧环境可能没有） */
 export function cssEscape(value: string): string {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
     return CSS.escape(value);

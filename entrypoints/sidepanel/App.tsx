@@ -24,6 +24,7 @@ import {
   uploadKnowledgeFile,
 } from '@/lib/api/client';
 import type { KnowledgeFile } from '@/lib/api/types';
+import { downloadTrace, readTrace, type StoredTrace } from '@/lib/trace/runtime';
 import {
   ensureSettingsLoaded,
   getSettings,
@@ -53,7 +54,12 @@ type TextPart = {
   text: string;
 };
 
-type MessagePart = TextPart | ToolPart;
+type ReasoningPart = {
+  kind: 'reasoning';
+  text: string;
+};
+
+type MessagePart = TextPart | ToolPart | ReasoningPart;
 
 type ChatMessage = {
   id: string;
@@ -63,10 +69,15 @@ type ChatMessage = {
 };
 
 const TOOL_LABELS: Record<string, string> = {
-  extractPageFields: '抽取页面字段',
-  listKnowledgeFiles: '列出知识库',
-  fillFormFields: '后端填值',
-  applyFieldValues: '写回 DOM',
+  probeFrames: '探测页面 Frames',
+  snapshotForm: '表单快照抽取',
+  describeRegion: '查看区域详情',
+  readElementDetail: '查看控件详情',
+  activate: '交互探索',
+  openOptions: '展开选项',
+  getExtractionReport: '抽取质量报告',
+  commitFormGraph: '提交后端检索填值',
+  applyValues: '写回 DOM',
 };
 
 const INITIAL: ChatMessage[] = [
@@ -76,7 +87,7 @@ const INITIAL: ChatMessage[] = [
     parts: [
       {
         kind: 'text',
-        text: '你好，我是 Snapfill。请先登录并勾选知识库材料，再在待填页面说「帮我填表」；我会流式展示工具调用并写回页面。',
+        text: '你好，我是 Snapfill。请先登录并勾选知识库，打开待填页后说「帮我填表」。我会用 thinking 模式探索 iframe/空间标签，再填值写回。',
       },
     ],
   },
@@ -158,6 +169,8 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [agentReady, setAgentReady] = useState(false);
 
+  const [trace, setTrace] = useState<StoredTrace | null>(null);
+
   const [loggedIn, setLoggedIn] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -204,6 +217,10 @@ function App() {
       portRef.current?.disconnect();
       portRef.current = null;
     };
+  }, []);
+
+  useEffect(() => {
+    void readTrace().then(setTrace);
   }, []);
 
   useEffect(() => {
@@ -507,6 +524,22 @@ function App() {
           return next;
         });
         break;
+      case 'reasoning-delta':
+        if (!event.delta) break;
+        updateAssistant(aid, (parts) => {
+          const next = [...parts];
+          const last = next[next.length - 1];
+          if (last?.kind === 'reasoning') {
+            next[next.length - 1] = {
+              kind: 'reasoning',
+              text: last.text + event.delta,
+            };
+          } else {
+            next.push({ kind: 'reasoning', text: event.delta });
+          }
+          return next;
+        });
+        break;
       case 'tool-call':
         updateAssistant(aid, (parts) => [
           ...parts,
@@ -567,6 +600,7 @@ function App() {
         );
         setBusy(false);
         assistantIdRef.current = null;
+        void readTrace().then(setTrace);
         break;
       case 'error':
         updateAssistant(
@@ -927,6 +961,16 @@ function App() {
               停止
             </button>
           )}
+          {!busy && trace && (
+            <button
+              type="button"
+              className="action action--ghost action--sm"
+              title={`${trace.controls.length} 个控件 · ${formatWhen(trace.capturedAt)}`}
+              onClick={() => downloadTrace(trace)}
+            >
+              导出抽取产物
+            </button>
+          )}
         </div>
         <p className="chat__stats">
           {!settingsReady
@@ -953,6 +997,11 @@ function App() {
                 <div key={i} className="bubble__text">
                   {part.text}
                 </div>
+              ) : part.kind === 'reasoning' ? (
+                <details key={`r-${i}`} className="reasoning" open={message.streaming}>
+                  <summary>Thinking</summary>
+                  <pre className="reasoning__body">{part.text}</pre>
+                </details>
               ) : (
                 <details
                   key={part.toolCallId}

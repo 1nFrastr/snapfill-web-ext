@@ -1,10 +1,11 @@
 import type {
   ApiEnvelope,
+  FormFactPayload,
   FormFieldsFillData,
-  FormFieldsFillRequest,
   KnowledgeFile,
   KnowledgeFilesData,
 } from '@/lib/api/types';
+import { getEnvDevToken } from '@/lib/env';
 import { getSettings } from '@/lib/settings/store';
 import { slog, swarn } from '@/lib/log';
 
@@ -12,6 +13,8 @@ const TOKEN_KEY = 'snapfill:accessToken';
 const USER_KEY = 'snapfill:username';
 const DEVICE_KEY = 'snapfill:deviceId';
 const SELECTED_KB_KEY = 'snapfill:selectedKbIds';
+/** 用户主动退出过 → 不再用 dev token 自动播种（见 seedDevToken） */
+const DEV_SEED_OPTOUT_KEY = 'snapfill:devSeedOptOut';
 
 export class AuthRequiredError extends Error {
   constructor(message = '请先登录') {
@@ -98,14 +101,37 @@ export async function passwordLogin(
     [TOKEN_KEY]: json.access_token,
     [USER_KEY]: username,
   });
+  await browser.storage.local.remove(DEV_SEED_OPTOUT_KEY);
   // 清掉旧版 session 存储，避免双源
   await browser.storage.session.remove([TOKEN_KEY, USER_KEY]).catch(() => undefined);
   slog('api', `登录成功 user=${username} token_len=${json.access_token.length}`);
   return json.access_token;
 }
 
+/**
+ * 用 .env.local 里的 `WXT_API_DEV_TOKEN` 播种登录态，仅在当前没有 token 时生效。
+ *
+ * 只为本地联调存在：重装/重载扩展会清掉 storage，否则每次都得手动登录或往 storage 里塞 token。
+ * 不覆盖已有 token（真登录过就以真的为准），production 构建里 env 读到空串因而整个跳过。
+ */
+export async function seedDevToken(): Promise<boolean> {
+  const { token, username } = getEnvDevToken();
+  if (!token) return false;
+  const stored = await browser.storage.local.get([TOKEN_KEY, DEV_SEED_OPTOUT_KEY]);
+  if (stored[TOKEN_KEY]) return false;
+  // MV3 的 service worker 会频繁重启，不记下"用户主动退出过"会让退出登录看起来失效
+  if (stored[DEV_SEED_OPTOUT_KEY]) return false;
+  await browser.storage.local.set({
+    [TOKEN_KEY]: token,
+    [USER_KEY]: username || '(dev-token)',
+  });
+  slog('api', `已用 .env.local 的 WXT_API_DEV_TOKEN 播种登录态 token_len=${token.length}`);
+  return true;
+}
+
 export async function logout(): Promise<void> {
   await browser.storage.local.remove([TOKEN_KEY, USER_KEY]);
+  await browser.storage.local.set({ [DEV_SEED_OPTOUT_KEY]: true });
   await browser.storage.session.remove([TOKEN_KEY, USER_KEY]).catch(() => undefined);
   slog('api', '已退出登录');
 }
@@ -308,19 +334,19 @@ export async function uploadKnowledgeFile(
   return { fileIds, taskId, files: confirmed, originalFilename: filename };
 }
 
-export async function fillFormFields(
-  body: Omit<FormFieldsFillRequest, 'device_id'> & { device_id?: string | null },
+export async function fillFormRegions(
+  body: Omit<FormFactPayload, 'device_id'> & { device_id?: string | null },
 ): Promise<FormFieldsFillData> {
   const device_id = body.device_id ?? (await getDeviceId());
-  const payload: FormFieldsFillRequest = {
+  const payload: FormFactPayload = {
     ...body,
     device_id,
   };
   slog(
     'api',
-    `form-fields/fill fields=${payload.fields.length} kb=${payload.knowledge_file_ids?.length ?? 'all'} context=${payload.page_context?.slice(0, 60) ?? ''}`,
+    `form-regions/fill controls=${payload.controls.length} texts=${payload.texts.length} regions=${payload.structure.regions.length} kb=${payload.knowledge_file_ids?.length ?? 'all'}`,
   );
-  return authedJson<FormFieldsFillData>('/Table/form-fields/fill', {
+  return authedJson<FormFieldsFillData>('/Table/form-regions/fill', {
     method: 'POST',
     body: JSON.stringify(payload),
   });

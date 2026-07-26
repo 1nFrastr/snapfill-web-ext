@@ -21,7 +21,7 @@ web-ext.config.ts
 lib/ai/config.ts
 lib/api/config.ts
 
-# CLI outputs
+# 抽取产物 / 离线 harness 输出
 output/
 
 # Editor directories and files

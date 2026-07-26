@@ -13,6 +13,7 @@ export const SECRET_ENV_KEYS = [
   'WXT_DEEPSEEK_API_KEY',
   'WXT_API_DEFAULT_USERNAME',
   'WXT_API_DEFAULT_PASSWORD',
+  'WXT_API_DEV_TOKEN',
 ] as const;
 
 type MetaEnv = Record<string, string | boolean | undefined>;
@@ -60,6 +61,17 @@ function plain(key: string, fallback = ''): string {
 function intEnv(key: string, fallback: number): number {
   const n = Number(plain(key));
   return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/**
+ * 本地联调用的现成 access_token，省掉每次重装扩展都要手动登录/往 storage 里塞 token。
+ * 走 `secret()`，所以 production 构建读到空串——不会被打进要分发的包。
+ */
+export function getEnvDevToken(): { token: string; username: string } {
+  return {
+    token: secret('WXT_API_DEV_TOKEN'),
+    username: plain('WXT_API_DEV_TOKEN_USER', secret('WXT_API_DEFAULT_USERNAME')),
+  };
 }
 
 /** 从 .env.local（dev）或安全默认值构造内置设置 */

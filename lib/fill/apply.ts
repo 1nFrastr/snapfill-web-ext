@@ -1,4 +1,4 @@
-import { cssEscape } from '@/lib/parser/css-escape';
+import { cssEscape } from '@/lib/formgraph/css-escape';
 import type { FieldLocator } from '@/lib/fill/map-fields';
 import type { FormFieldValue } from '@/lib/api/types';
 
@@ -8,10 +8,22 @@ export type ApplyResult = {
   lowConfidence: string[];
 };
 
+/** 部分框架（Vue/Element、表单校验库）依赖 blur/focusout 才触发校验或提交同步 */
+function dispatchBlurEvents(el: HTMLElement) {
+  const Evt = el.ownerDocument.defaultView?.FocusEvent ?? FocusEvent;
+  try {
+    el.dispatchEvent(new Evt('blur', { bubbles: false }));
+    el.dispatchEvent(new Evt('focusout', { bubbles: true }));
+  } catch {
+    // 部分环境 FocusEvent 构造受限，忽略
+  }
+}
+
 function dispatchInputEvents(el: HTMLElement) {
   const Evt = el.ownerDocument.defaultView?.Event ?? Event;
   el.dispatchEvent(new Evt('input', { bubbles: true }));
   el.dispatchEvent(new Evt('change', { bubbles: true }));
+  dispatchBlurEvents(el);
 }
 
 function setNativeValue(
@@ -59,6 +71,24 @@ function applyOne(
 
   const el = document.querySelector(locator.selector);
   if (!el) return { ok: false, reason: `找不到控件 ${locator.selector}` };
+
+  // 组件库场景：真值落在隐藏 backing input/select 上，优先写它（可见 div/button 只是展示层）
+  if (locator.widget === 'component' && locator.backingSelector) {
+    const backing = document.querySelector(locator.backingSelector);
+    if (backing instanceof HTMLSelectElement) {
+      const matched = matchOptionValue(
+        [...backing.options].map((o) => ({ label: o.textContent?.trim() || o.value, value: o.value })),
+        value,
+      );
+      if (matched != null) {
+        setNativeValue(backing, matched);
+        return { ok: true };
+      }
+    } else if (backing instanceof HTMLInputElement) {
+      setNativeValue(backing, value);
+      return { ok: true };
+    }
+  }
 
   if (locator.type === 'select' && el instanceof HTMLSelectElement) {
     const matched = matchOptionValue(
@@ -144,6 +174,57 @@ function applyOne(
   }
 
   return { ok: false, reason: '不支持的控件类型' };
+}
+
+export type VerifyStatus = 'verified' | 'reverted' | 'mismatch' | 'not-found';
+
+function readCurrentValue(locator: FieldLocator): string {
+  const target = locator.backingSelector
+    ? document.querySelector(locator.backingSelector) || document.querySelector(locator.selector)
+    : document.querySelector(locator.selector);
+  if (!target) return '';
+  if (target instanceof HTMLSelectElement) return target.value;
+  if (target instanceof HTMLTextAreaElement) return target.value;
+  if (target instanceof HTMLInputElement) {
+    if (target.type === 'checkbox') return target.checked ? 'true' : '';
+    if (target.type === 'radio') {
+      const name = locator.name || target.name;
+      const checked = document.querySelector<HTMLInputElement>(
+        `input[type="radio"][name="${cssEscape(name || '')}"]:checked`,
+      );
+      return checked?.value || '';
+    }
+    return target.value;
+  }
+  return (target.textContent || '').trim();
+}
+
+/**
+ * 写入后回读校验：部分受控组件（React/Vue）会在下一个事件循环把值回滚，
+ * 或组件库根本没有响应 setNativeValue。用于向 Agent 暴露真实成功率，而非"写了就算成功"。
+ */
+export function verifyApplied(
+  locators: FieldLocator[],
+  expected: Record<string, string>,
+): Record<string, VerifyStatus> {
+  const byId = new Map(locators.map((l) => [l.id, l]));
+  const out: Record<string, VerifyStatus> = {};
+  for (const [id, expectedValue] of Object.entries(expected)) {
+    const locator = byId.get(id);
+    if (!locator) {
+      out[id] = 'not-found';
+      continue;
+    }
+    const current = readCurrentValue(locator);
+    if (!current) {
+      out[id] = 'reverted';
+    } else if (current === expectedValue || current.includes(expectedValue) || expectedValue.includes(current)) {
+      out[id] = 'verified';
+    } else {
+      out[id] = 'mismatch';
+    }
+  }
+  return out;
 }
 
 /** 按定位表把后端 values 写回当前文档 */

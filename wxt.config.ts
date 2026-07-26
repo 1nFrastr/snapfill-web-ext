@@ -6,6 +6,7 @@ const SECRET_ENV_KEYS = [
   'WXT_DEEPSEEK_API_KEY',
   'WXT_API_DEFAULT_USERNAME',
   'WXT_API_DEFAULT_PASSWORD',
+  'WXT_API_DEV_TOKEN',
 ] as const;
 
 // See https://wxt.dev/api/config.html
