@@ -1,7 +1,10 @@
-/** 标签级联解析 + 四向近邻文本 + 表格网格元信息。 */
+/**
+ * 标签解析：只保留 HTML/DOM 规范级事实关联。
+ * 几何猜题干、内容噪声过滤留给后端在完整 texts 层上处理。
+ */
 
 import { cssEscape } from '@/lib/formgraph/css-escape';
-import { looksLikeHash, norm, type TextNode } from '@/lib/formgraph/dom-utils';
+import { hasDataControl, looksLikeHash, norm, type TextNode } from '@/lib/formgraph/dom-utils';
 import type { LabelSource, TableMeta } from '@/lib/formgraph/types';
 
 function labelFor(el: Element): string | null {
@@ -29,45 +32,27 @@ function ariaLabel(el: Element): string | null {
   );
 }
 
-function tableLeftOrHeader(el: Element): { text: string | null; source: LabelSource | null } {
+/** thead 同列文本：表格结构事实（列索引对齐），非几何猜测。 */
+function tableHeader(el: Element, layoutCell = false): string | null {
+  if (layoutCell) return null;
   const td = el.closest('td,th');
-  if (!td || !(td instanceof HTMLTableCellElement)) return { text: null, source: null };
-  const tr = td.parentElement;
-  if (!(tr instanceof HTMLTableRowElement)) return { text: null, source: null };
-  const cells = [...tr.children].filter((c): c is HTMLTableCellElement => c instanceof HTMLTableCellElement);
-  const idx = cells.indexOf(td);
-  if (idx > 0) {
-    const prevCell = cells[idx - 1];
-    // 左邻格里如果本身就有控件，它是数据格而不是标签格（其文本多半是 option 文案），
-    // 这种情况要落到表头去取列名
-    const prevIsDataCell = Boolean(prevCell.querySelector('input,select,textarea,[contenteditable="true"]'));
-    const prev = norm(prevCell.textContent);
-    if (!prevIsDataCell && prev && prev.length < 80 && !looksLikeHash(prev)) {
-      return { text: prev, source: 'table-left-cell' };
-    }
-  }
+  if (!td || !(td instanceof HTMLTableCellElement)) return null;
   const table = td.closest('table');
   const headRow = table?.querySelector('thead tr');
-  if (headRow) {
-    const head = headRow.children[idx];
-    const t = norm(head?.textContent);
-    if (t && !looksLikeHash(t)) return { text: t, source: 'table-header' };
-  }
-  return { text: null, source: null };
+  if (!headRow) return null;
+  const t = norm(headRow.children[td.cellIndex]?.textContent);
+  return t && !looksLikeHash(t) ? t : null;
 }
 
 /**
- * radio 组会被去重成一个字段，此时 label 应该是"组问题"（如"本项目组是否含境外人员"），
- * 而不是某个选项的文案（如"是"）——选项文案已经进 options 了。
- * 拿不到组问题时返回 null，让原有级联继续兜底。
+ * radio 组问题：DOM 结构事实（radiogroup aria / fieldset legend / 组容器内选项前文本）。
  */
 function radioGroupQuestion(el: Element): { text: string; source: LabelSource } | null {
   if (!(el instanceof HTMLInputElement) || el.type !== 'radio' || !el.name) return null;
-  const group = [...document.querySelectorAll<HTMLInputElement>(`input[type="radio"][name="${CSS.escape(el.name)}"]`)];
+  const group = [
+    ...document.querySelectorAll<HTMLInputElement>(`input[type="radio"][name="${CSS.escape(el.name)}"]`),
+  ];
   if (group.length < 2) return null;
-
-  const tbl = tableLeftOrHeader(el);
-  if (tbl.text && tbl.source) return { text: tbl.text, source: tbl.source };
 
   const radiogroup = el.closest('[role="radiogroup"]');
   if (radiogroup) {
@@ -75,8 +60,6 @@ function radioGroupQuestion(el: Element): { text: string; source: LabelSource } 
     if (aria) return { text: aria, source: 'aria' };
   }
 
-  // 组容器内、第一个选项之前的说明文字（<span>问题</span><label>是</label><label>否</label>）
-  // 比 fieldset legend 更贴近该组，优先采用
   const container = group.reduce<Element | null>((acc, r) => {
     if (!acc) return r.parentElement;
     let a: Element | null = acc;
@@ -87,31 +70,31 @@ function radioGroupQuestion(el: Element): { text: string; source: LabelSource } 
     let question = '';
     for (const child of container.children) {
       if (group.some((r) => child.contains(r))) break;
+      if (hasDataControl(child)) continue;
       const t = norm(child.textContent);
-      if (t && t.length < 80 && !looksLikeHash(t)) question = t;
+      if (t && !looksLikeHash(t)) question = t;
     }
     if (question) return { text: question, source: 'group-question' };
   }
 
-  // 整组独占一个 fieldset 时，legend 兜底作组问题
   const fs = el.closest('fieldset');
   if (fs && fs.querySelectorAll('input[type="radio"]').length === group.length) {
     const legend = norm(fs.querySelector(':scope > legend')?.textContent);
-    if (legend && legend.length < 80) return { text: legend, source: 'group-question' };
+    if (legend) return { text: legend, source: 'group-question' };
   }
 
   return null;
 }
 
+/** 四向最近文本：作为空间邻居事实留给本地 Agent / texts 对照，不进 label。 */
 function nearestText(
   elRect: DOMRect,
   textNodes: TextNode[],
   mode: 'left' | 'right' | 'above' | 'below',
-): { text: string; el: Element | null } {
+): string {
   let best = '';
-  let bestEl: Element | null = null;
   let bestScore = 1e18;
-  for (const { t, r, el } of textNodes) {
+  for (const { t, r } of textNodes) {
     const dy = Math.abs((r.top + r.bottom) / 2 - (elRect.top + elRect.bottom) / 2);
     const dxLeft = elRect.left - r.right;
     const dxRight = r.left - elRect.right;
@@ -120,26 +103,24 @@ function nearestText(
     const dyBelow = r.top - elRect.bottom;
     let score = 1e18;
     if (mode === 'left') {
-      if (dxLeft < -20 || dxLeft > 320 || dy > 36) continue;
+      if (dxLeft < -20 || dxLeft > 2000 || dy > 80) continue;
       score = dy * 3 + Math.abs(dxLeft);
     } else if (mode === 'right') {
-      // 右侧文本常见于 checkbox/radio 的标签
-      if (dxRight < -20 || dxRight > 240 || dy > 24) continue;
+      if (dxRight < -20 || dxRight > 2000 || dy > 80) continue;
       score = dy * 3 + Math.abs(dxRight);
     } else if (mode === 'above') {
-      if (dyAbove < -10 || dyAbove > 120 || dxCenter > Math.max(elRect.width, 240)) continue;
+      if (dyAbove < -10 || dyAbove > 2000 || dxCenter > Math.max(elRect.width, 800)) continue;
       score = dyAbove * 2 + dxCenter;
     } else {
-      if (dyBelow < -10 || dyBelow > 120 || dxCenter > Math.max(elRect.width, 240)) continue;
+      if (dyBelow < -10 || dyBelow > 2000 || dxCenter > Math.max(elRect.width, 800)) continue;
       score = dyBelow * 2 + dxCenter;
     }
     if (score < bestScore) {
       bestScore = score;
       best = t;
-      bestEl = el;
     }
   }
-  return { text: best, el: bestEl };
+  return best;
 }
 
 export type ResolvedLabel = {
@@ -153,16 +134,16 @@ export type ResolvedLabel = {
   textBelow: string;
 };
 
+/** 仅 HTML 事实源写入 label；近邻文本只填 neighbors，供本地核对。 */
 export function resolveLabel(
   el: Element,
   elRect: DOMRect,
   textNodes: TextNode[],
-  opts?: { preferRight?: boolean },
+  opts?: { layoutCell?: boolean },
 ): ResolvedLabel {
   type Cand = { text: string; source: LabelSource; conf: 'high' | 'medium' | 'low' };
   const candidates: Cand[] = [];
 
-  // radio 组的"组问题"必须压过 wrapping-label（后者只是某个选项的文案）
   const group = radioGroupQuestion(el);
   if (group) candidates.push({ text: group.text, source: group.source, conf: 'high' });
 
@@ -173,52 +154,38 @@ export function resolveLabel(
   const c = ariaLabel(el);
   if (c) candidates.push({ text: c, source: 'aria', conf: 'high' });
 
-  // 表格左格/表头是结构性信号（与后端 PRM 对"空白格 vs 标签格"的判定一致），
-  // 优先于纯几何近邻猜测
-  const tbl = tableLeftOrHeader(el);
-  if (tbl.text && tbl.source) {
-    candidates.push({ text: tbl.text, source: tbl.source, conf: 'high' });
-  }
+  const head = tableHeader(el, opts?.layoutCell);
+  if (head) candidates.push({ text: head, source: 'table-header', conf: 'high' });
+
+  const ph = norm(el.getAttribute('placeholder'));
+  if (ph) candidates.push({ text: ph, source: 'placeholder', conf: 'low' });
+
+  const picked =
+    candidates.find((x) => !looksLikeHash(x.text)) ||
+    candidates[0] || { text: '', source: 'empty' as const, conf: 'low' as const };
 
   const left = nearestText(elRect, textNodes, 'left');
   const right = nearestText(elRect, textNodes, 'right');
   const above = nearestText(elRect, textNodes, 'above');
   const below = nearestText(elRect, textNodes, 'below');
 
-  // checkbox/radio 常见标签在右侧；其余控件左/上优先
-  if (opts?.preferRight && right.text) {
-    candidates.push({ text: right.text, source: 'near-right', conf: 'medium' });
-  }
-  if (left.text) candidates.push({ text: left.text, source: 'near-left', conf: 'medium' });
-  if (above.text) candidates.push({ text: above.text, source: 'near-above', conf: 'medium' });
-  if (!opts?.preferRight && right.text) {
-    candidates.push({ text: right.text, source: 'near-right', conf: 'medium' });
-  }
-
-  const ph = norm(el.getAttribute('placeholder'));
-  if (ph) candidates.push({ text: ph, source: 'placeholder', conf: 'low' });
-  const name = norm(el.getAttribute('name'));
-  if (name && !looksLikeHash(name)) candidates.push({ text: name, source: 'name', conf: 'low' });
-  const id = norm(el.id);
-  if (id && !looksLikeHash(id)) candidates.push({ text: id, source: 'id', conf: 'low' });
-
-  const picked =
-    candidates.find((x) => !looksLikeHash(x.text)) ||
-    candidates[0] || { text: '', source: 'empty' as const, conf: 'low' as const };
-
   return {
     label: picked.text,
     labelSource: picked.source,
     labelConfidence: picked.conf,
-    nearLabel: left.text || right.text || above.text || '',
-    textLeft: left.text,
-    textRight: right.text,
-    textAbove: above.text,
-    textBelow: below.text,
+    nearLabel: left || right || above || '',
+    textLeft: left,
+    textRight: right,
+    textAbove: above,
+    textBelow: below,
   };
 }
 
-export function tableMeta(el: Element, visible: Element[]): TableMeta | null {
+export function tableMeta(
+  el: Element,
+  visible: Element[],
+  rowsInCell: ReadonlyMap<Element, number>,
+): TableMeta | null {
   const td = el.closest('td,th');
   if (!td || !(td instanceof HTMLTableCellElement)) return null;
   const table = td.closest('table');
@@ -232,5 +199,6 @@ export function tableMeta(el: Element, visible: Element[]): TableMeta | null {
     colspan: td.colSpan || 1,
     rowspan: td.rowSpan || 1,
     controlsInCell: visible.filter((c) => td.contains(c)).length,
+    rowsInCell: rowsInCell.get(td) ?? 1,
   };
 }

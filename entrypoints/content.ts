@@ -12,6 +12,9 @@ import {
   type ActivateRequest,
   type OpenOptionsRequest,
   type WaitStableRequest,
+  type RevealAllResponse,
+  type ScrollPageRequest,
+  type ScrollPageResponse,
   type VerifyAppliedRequest,
   type RenderOverlayRequest,
   type ElementDetail,
@@ -23,6 +26,93 @@ import { elapsed, slog, serror } from '@/lib/log';
 /** 最近一次 snapshotForm 的产出，供 describeRegion/readElementDetail/activate/openOptions 按 id 查回元素 */
 let lastFragment: FormGraphFragment | null = null;
 let lastRegistry: Map<string, Element> = new Map();
+
+const countControls = () =>
+  document.querySelectorAll('input:not([type="hidden"]),select,textarea,[contenteditable="true"]').length;
+
+/**
+ * 把本 frame 的页面坐标 `y` 滚到视口顶部，并回报拼整页截图所需的指标。
+ *
+ * 表单常在 iframe 里，而 iframe 未必自己有滚动条——内容被完全撑开、由祖先文档滚动。
+ * 两种情况都要覆盖：自己能滚就滚自己，否则同源逐级上溯换算成顶层文档的偏移再滚顶层。
+ * 回报的是**实际到达**的位置（滚到底会小于请求值），拼图必须按实际值排布，否则末尾会错位。
+ */
+function scrollPage(y?: number): ScrollPageResponse {
+  try {
+    const se = document.scrollingElement ?? document.documentElement;
+    const selfScrolls = se.scrollHeight > se.clientHeight + 4;
+
+    if (y != null) {
+      if (selfScrolls) {
+        se.scrollTop = y;
+      } else {
+        let win: Window = window;
+        let offset = y;
+        // 同源才能读 frameElement；跨域时退化成只滚自己（上面那一支）
+        while (win.parent !== win && win.frameElement) {
+          const rect = win.frameElement.getBoundingClientRect();
+          offset += rect.top + win.parent.scrollY;
+          win = win.parent;
+        }
+        win.scrollTo({ top: offset, behavior: 'instant' as ScrollBehavior });
+      }
+    }
+
+    const viewport = selfScrolls ? se.clientHeight : window.innerHeight;
+    return {
+      ok: true as const,
+      scrollY: selfScrolls ? se.scrollTop : window.scrollY || se.scrollTop,
+      contentHeight: Math.max(se.scrollHeight, document.body?.scrollHeight ?? 0),
+      viewportHeight: viewport,
+      viewportWidth: selfScrolls ? se.clientWidth : window.innerWidth,
+      devicePixelRatio: window.devicePixelRatio || 1,
+      selfScrolls,
+    };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * 滚过整页与所有内部滚动容器，把懒渲染/虚拟列表的内容逼出来。
+ *
+ * 抽取本身不要求控件在视口内（只要求有非零尺寸），所以这里唯一的目的是触发
+ * IntersectionObserver 之类的延迟挂载。滚完恢复原位，避免影响后续截图与坐标。
+ */
+async function revealAll(): Promise<RevealAllResponse> {
+  try {
+    const controlsBefore = countControls();
+    const containers = [
+      document.scrollingElement ?? document.documentElement,
+      ...[...document.querySelectorAll('*')].filter((el) => {
+        const st = getComputedStyle(el);
+        return (
+          /auto|scroll/.test(st.overflowY) && el.scrollHeight > el.clientHeight + 200
+        );
+      }),
+    ];
+
+    for (const el of containers) {
+      const original = el.scrollTop;
+      const step = Math.max(el.clientHeight * 0.8, 200);
+      for (let y = 0; y <= el.scrollHeight; y += step) {
+        el.scrollTop = y;
+        await new Promise((r) => setTimeout(r, 60));
+      }
+      el.scrollTop = original;
+    }
+    await new Promise((r) => setTimeout(r, 200));
+
+    return {
+      ok: true as const,
+      controlsBefore,
+      controlsAfter: countControls(),
+      scrolledContainers: containers.length,
+    };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -66,10 +156,13 @@ export default defineContentScript({
             .map((f) => ({
               fieldId: f.fieldId,
               label: f.label,
+              labelSource: f.labelSource,
               control: `${f.control.tag}:${f.control.type}`,
               required: f.required,
               readonly: f.readonly,
               existingValue: f.existingValue,
+              rowIndex: f.rowIndex,
+              columnKey: f.columnKey,
               rect: f.rect,
             }));
           return Promise.resolve({
@@ -187,6 +280,15 @@ export default defineContentScript({
         } catch (e) {
           return Promise.resolve({ ok: false as const, error: e instanceof Error ? e.message : String(e) });
         }
+      }
+
+      if (message?.type === MessageType.REVEAL_ALL) {
+        return revealAll();
+      }
+
+      if (message?.type === MessageType.SCROLL_PAGE) {
+        const req = message as ScrollPageRequest;
+        return Promise.resolve(scrollPage(req.y));
       }
 
       if (message?.type === MessageType.WAIT_STABLE) {

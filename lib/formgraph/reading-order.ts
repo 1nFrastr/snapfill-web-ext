@@ -12,11 +12,17 @@ import type { Rect } from '@/lib/formgraph/types';
 /** 同一行的判定：两个 rect 的纵向重叠超过较矮者的 40% */
 const ROW_OVERLAP_RATIO = 0.4;
 
-type Row<T> = { y0: number; y1: number; items: T[] };
+export type VisualRow<T> = { y0: number; y1: number; items: T[] };
 
-export function sortByReadingOrder<T extends { rect: Rect }>(items: T[]): T[] {
+/**
+ * 几何行聚类：按纵向重叠把元素分行，行内按 x 升序。
+ *
+ * 除了阅读顺序编号，列头对齐与整幅标题行判定也吃这同一套分行结果——
+ * 「哪些东西在人眼看来是同一行」是这些推断共同的前提，必须只有一份实现。
+ */
+export function clusterVisualRows<T extends { rect: Rect }>(items: T[]): VisualRow<T>[] {
   const sorted = [...items].sort((a, b) => a.rect.y - b.rect.y);
-  const rows: Row<T>[] = [];
+  const rows: VisualRow<T>[] = [];
 
   for (const item of sorted) {
     const y0 = item.rect.y;
@@ -36,5 +42,10 @@ export function sortByReadingOrder<T extends { rect: Rect }>(items: T[]): T[] {
   }
 
   rows.sort((a, b) => a.y0 - b.y0);
-  return rows.flatMap((row) => row.items.sort((a, b) => a.rect.x - b.rect.x));
+  for (const row of rows) row.items.sort((a, b) => a.rect.x - b.rect.x);
+  return rows;
+}
+
+export function sortByReadingOrder<T extends { rect: Rect }>(items: T[]): T[] {
+  return clusterVisualRows(items).flatMap((row) => row.items);
 }

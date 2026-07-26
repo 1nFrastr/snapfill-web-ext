@@ -44,7 +44,7 @@ pnpm fixtures
 感知  probeFrames / snapshotForm / describeRegion / readElementDetail
 行动  activate / openOptions（内建导航守卫、预算上限、危险按钮黑名单）
 观察  getExtractionReport（覆盖率 / 标签置信率 / 低置信控件清单）
-提交  commitFormGraph（字段清单由 FormGraph 确定性生成，POST /Table/form-fields/fill）
+提交  commitFormGraph（事实层 controls+texts+structure → POST /Table/form-regions/fill）
 回填  applyValues（按 frameId 定向写回 + 回读校验 verified/reverted/mismatch）
 ```
 

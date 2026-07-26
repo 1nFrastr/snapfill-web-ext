@@ -50,7 +50,7 @@ export type ControlRow = {
   label: string;
   label_source: string;
   label_confidence: string;
-  query_hint: string;
+  near_hint: string;
   region: string;
   control: string;
   route: string;
@@ -103,7 +103,7 @@ export function buildControlRows(graph: FormGraph): ControlRow[] {
         label: f.label || f.nearLabel,
         label_source: f.labelSource,
         label_confidence: f.labelConfidence,
-        query_hint: f.queryHint,
+        near_hint: [f.neighbors.textLeft, f.neighbors.textAbove].filter(Boolean).join(' / '),
         region: region ? `${region.name || region.regionId}[${region.kind}]` : f.regionId,
         control: describeControl(f),
         route: f.routeHint,
@@ -123,7 +123,7 @@ function mdCell(s: string | number): string {
 export function renderControlTable(rows: ControlRow[]): string {
   const multiPanel = new Set(rows.map((r) => r.panel)).size > 1;
   const head =
-    `| # |${multiPanel ? ' 面板 |' : ''} 题干（label） | 来源/置信 | 检索线索（queryHint） | 区域 | 控件 | 路由 | 标记 | 现值 | selector |`;
+    `| # |${multiPanel ? ' 面板 |' : ''} 题干（HTML事实） | 来源/置信 | 近邻文本（核对提示） | 区域 | 控件 | 路由 | 标记 | 现值 | selector |`;
   const sep = `|---|${multiPanel ? '---|' : ''}---|---|---|---|---|---|---|---|---|`;
   const body = rows.map((r) =>
     [
@@ -131,7 +131,7 @@ export function renderControlTable(rows: ControlRow[]): string {
       ...(multiPanel ? [mdCell(r.panel)] : []),
       mdCell(r.label),
       `${r.label_source}/${r.label_confidence}`,
-      mdCell(r.query_hint),
+      mdCell(r.near_hint),
       mdCell(r.region),
       r.control + (r.options ? ` ${r.options}项` : ''),
       r.route,

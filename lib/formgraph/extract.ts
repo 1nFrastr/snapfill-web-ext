@@ -1,8 +1,6 @@
 /**
  * FormGraph 主抽取入口：单个 frame/document 内产出 FormGraphFragment。
- * 跨 frame 汇总、跨轮次 diff/merge 见 lib/formgraph/merge.ts；
- * 由 content script 在各自 frame 上下文调用，registry 留在 content script 侧供后续
- * describeRegion / readElementDetail / activate / openOptions 工具按 id 查回元素。
+ * 插件只产 DOM/几何事实；题干关联与 query 由后端处理。
  */
 
 import {
@@ -14,6 +12,9 @@ import {
   shadowHostChain,
   computePageOffset,
   collectTextNodes,
+  readTextTypography,
+  inPagerContainer,
+  inTableFooter,
 } from '@/lib/formgraph/dom-utils';
 import { detectControl, findHiddenBackingInput, isSignatureCanvas } from '@/lib/formgraph/component-detect';
 import { resolveLabel, tableMeta } from '@/lib/formgraph/label-resolve';
@@ -21,6 +22,7 @@ import { stableFieldId } from '@/lib/formgraph/identity';
 import { buildRegions } from '@/lib/formgraph/sections';
 import {
   classifyTable,
+  detectAddButtons,
   detectDialogTriggers,
   detectGateCandidates,
   detectPanels,
@@ -29,6 +31,7 @@ import {
   makeInteractiveIdFactory,
 } from '@/lib/formgraph/repeat';
 import { computeMetrics } from '@/lib/formgraph/metrics';
+import { analyzeLayout, type GridRepeatGroup, type LayoutAnalysis } from '@/lib/formgraph/layout';
 import { sortByReadingOrder } from '@/lib/formgraph/reading-order';
 import type { WorkingField, WorkingInteractive } from '@/lib/formgraph/internal-types';
 import type {
@@ -38,6 +41,7 @@ import type {
   NeighborsInfo,
   RegionNode,
   RouteHint,
+  TextFact,
   UnresolvedItem,
 } from '@/lib/formgraph/types';
 
@@ -94,19 +98,19 @@ function collectFieldNeighbors(fields: WorkingField[]): void {
       const dxCenter = Math.abs(gr.x + gr.w / 2 - (r.x + r.w / 2));
 
       if (gr.x + gr.w <= r.x && dy < Math.max(r.h, 24)) {
-        const score = (r.x - (gr.x + gr.w)) + dy * 2;
+        const score = r.x - (gr.x + gr.w) + dy * 2;
         if (!bestLeft || score < bestLeft.score) bestLeft = { id: g.fieldId, score };
       }
       if (gr.x >= r.x + r.w && dy < Math.max(r.h, 24)) {
-        const score = (gr.x - (r.x + r.w)) + dy * 2;
+        const score = gr.x - (r.x + r.w) + dy * 2;
         if (!bestRight || score < bestRight.score) bestRight = { id: g.fieldId, score };
       }
       if (gr.y + gr.h <= r.y && dxCenter < 240) {
-        const score = (r.y - (gr.y + gr.h)) + dxCenter * 0.5;
+        const score = r.y - (gr.y + gr.h) + dxCenter * 0.5;
         if (!bestAbove || score < bestAbove.score) bestAbove = { id: g.fieldId, score };
       }
       if (gr.y >= r.y + r.h && dxCenter < 240) {
-        const score = (gr.y - (r.y + r.h)) + dxCenter * 0.5;
+        const score = gr.y - (r.y + r.h) + dxCenter * 0.5;
         if (!bestBelow || score < bestBelow.score) bestBelow = { id: g.fieldId, score };
       }
     }
@@ -118,15 +122,15 @@ function collectFieldNeighbors(fields: WorkingField[]): void {
   }
 }
 
-function buildSiblingSlots(fields: WorkingField[]): void {
+function buildSiblingSlots(fields: WorkingField[], layout: LayoutAnalysis): void {
   const groupMap = new Map<string, WorkingField[]>();
   for (const f of fields) {
-    const key =
-      f.table && f.table.controlsInCell > 1
+    const slot = layout.slotOf.get(f.el);
+    const key = slot
+      ? `${slot.groupKey}-r${slot.rowIndex}-${slot.columnKey}`
+      : f.table && f.table.controlsInCell > 1 && f.table.rowsInCell <= 1
         ? `t${f.table.tableIndex}-r${f.table.row}-c${f.table.col}`
-        : f.nearLabel
-          ? `y${Math.round(f.rect.y / 20)}_lab_${f.nearLabel}`
-          : '';
+        : '';
     if (!key) continue;
     if (!groupMap.has(key)) groupMap.set(key, []);
     groupMap.get(key)!.push(f);
@@ -134,11 +138,73 @@ function buildSiblingSlots(fields: WorkingField[]): void {
   for (const group of groupMap.values()) {
     if (group.length < 2) continue;
     group.sort((a, b) => a.rect.x - b.rect.x || a.rect.y - b.rect.y);
-    const sharedLabel = group[0].nearLabel || group[0].label;
+    const sharedLabel = layout.slotOf.get(group[0].el)?.columnLabel || group[0].label || '';
     group.forEach((f, index) => {
       f.siblingSlot = { index, count: group.length, sharedLabel };
     });
   }
+}
+
+const GRID_GROUP_DOMINANCE = 0.6;
+
+function dominantGridGroup(
+  fieldsInRegion: WorkingField[],
+  layout: LayoutAnalysis,
+): GridRepeatGroup | null {
+  const counts = new Map<string, number>();
+  for (const f of fieldsInRegion) {
+    const key = layout.slotOf.get(f.el)?.groupKey;
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  for (const [key, n] of counts) {
+    if (n >= fieldsInRegion.length * GRID_GROUP_DOMINANCE) {
+      return layout.groups.get(key) ?? null;
+    }
+  }
+  return null;
+}
+
+function unionRect(rects: { x: number; y: number; w: number; h: number }[]) {
+  const x = Math.min(...rects.map((r) => r.x));
+  const y = Math.min(...rects.map((r) => r.y));
+  return {
+    x,
+    y,
+    w: Math.max(...rects.map((r) => r.x + r.w)) - x,
+    h: Math.max(...rects.map((r) => r.y + r.h)) - y,
+  };
+}
+
+function buildTextFacts(frameId: number, panelKey: string): TextFact[] {
+  const textNodes = collectTextNodes(document);
+  const tables = [...document.querySelectorAll('table')];
+  return textNodes
+    .filter((n) => n.leaf)
+    .map((n) => {
+      const typo = readTextTypography(n.el);
+      const td = n.el.closest('td,th');
+      const table = td?.closest('table');
+      const tr = td?.parentElement;
+      const tablePos =
+        td instanceof HTMLTableCellElement && table && tr instanceof HTMLTableRowElement
+          ? {
+              tableIndex: tables.indexOf(table),
+              row: tr.rowIndex,
+              col: td.cellIndex,
+            }
+          : undefined;
+      return {
+        text: n.t,
+        rect: rectOf(n.el),
+        frameId,
+        panelKey,
+        domPath: cssPath(n.el),
+        fontSize: typo.fontSize,
+        fontWeight: typo.fontWeight,
+        tablePos,
+        leaf: true,
+      };
+    });
 }
 
 export type ExtractOptions = {
@@ -154,7 +220,7 @@ export type ExtractResult = {
 
 export function extractFormGraph(opts: ExtractOptions): ExtractResult {
   const frameId = opts.frameId;
-  const maxFields = opts.maxFields ?? 200;
+  const maxFields = opts.maxFields ?? 500;
   const unresolved: UnresolvedItem[] = [];
 
   const rawControls = deepQueryAll(CONTROL_SELECTOR, document, unresolved, frameId).filter(
@@ -179,14 +245,6 @@ export function extractFormGraph(opts: ExtractOptions): ExtractResult {
     dropped[reason] = (dropped[reason] ?? 0) + 1;
   };
 
-  /**
-   * coverage 的分母：本面板里真正渲染出来的候选控件数。
-   *
-   * 刻意排除三类，否则分母失真：隐藏面板的控件（属于别的面板，跨面板求和会重复计数）、
-   * type=hidden/button/submit（根本不是可填控件）、并入组件字段的 backing input 与
-   * 同组重复 radio（本就该合并成一个字段）。剩下被丢弃的都会进 dropped 直方图，
-   * 于是"少抽了字段"和"正确忽略了噪声"能被分辨出来。
-   */
   let controlsSeen = 0;
 
   for (const el of rawControls) {
@@ -218,7 +276,12 @@ export function extractFormGraph(opts: ExtractOptions): ExtractResult {
     }
     if (el.tagName.toLowerCase() === 'canvas' && !isSignatureCanvas(detectControl(el))) {
       bump('canvas-form');
-      unresolved.push({ reason: 'canvas-form', frameId, selector: cssPath(el), note: '非签名 canvas，暂无法结构化抽取' });
+      unresolved.push({
+        reason: 'canvas-form',
+        frameId,
+        selector: cssPath(el),
+        note: '非签名 canvas，暂无法结构化抽取',
+      });
       continue;
     }
     visibleControls.push(el);
@@ -231,23 +294,26 @@ export function extractFormGraph(opts: ExtractOptions): ExtractResult {
   const { panels, active: activePanel } = detectPanels(document);
   const panelKey = activePanel?.key ?? '';
 
-  const { regions: workingRegions, elementToRegion } = buildRegions(visibleControls, frameId);
-  // 面板名进 chain：queryHint 由 chain 拼出，后端因此能知道字段属于哪个页签
+  const textNodes = collectTextNodes(document);
+  const layout = analyzeLayout(visibleControls, textNodes);
+
+  const { regions: workingRegions, elementToRegion } = buildRegions(visibleControls, frameId, panelKey);
   if (activePanel?.label) {
     for (const r of workingRegions) {
       if (r.chain[0] !== activePanel.label) r.chain = [activePanel.label, ...r.chain];
     }
   }
-  const textNodes = collectTextNodes(document);
   const usedIds = new Set<string>();
   const collected: WorkingField[] = [];
 
   for (const el of visibleControls.slice(0, maxFields)) {
     const r = el.getBoundingClientRect();
-    const preferRight = el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio');
-    const resolved = resolveLabel(el, r, textNodes, { preferRight });
+    const gridSlot = layout.slotOf.get(el);
+    const table = tableMeta(el, visibleControls, layout.rowsInCell);
+    const resolved = resolveLabel(el, r, textNodes, {
+      layoutCell: (table?.rowsInCell ?? 1) > 1,
+    });
     const control = detectControl(el);
-    const table = tableMeta(el, visibleControls);
     const region = elementToRegion.get(el);
     const rect = rectOf(el);
     const pageOffset = computePageOffset();
@@ -256,7 +322,7 @@ export function extractFormGraph(opts: ExtractOptions): ExtractResult {
     const field: WorkingField = {
       el,
       fieldId: stableFieldId(el, { frameId, selector: cssPath(el), used: usedIds, label: resolved.label }),
-      controlNo: 0, // 全部字段收齐后按阅读顺序统一编号
+      controlNo: 0,
       regionId: region?.regionId ?? 'ungrouped',
       panelKey,
       control,
@@ -264,11 +330,14 @@ export function extractFormGraph(opts: ExtractOptions): ExtractResult {
       labelSource: resolved.labelSource,
       labelConfidence: resolved.labelConfidence,
       nearLabel: resolved.nearLabel,
-      queryHint: '',
       rect,
-      pageRect: pageOffset ? { x: rect.x + pageOffset.dx, y: rect.y + pageOffset.dy, w: rect.w, h: rect.h } : rect,
+      pageRect: pageOffset
+        ? { x: rect.x + pageOffset.dx, y: rect.y + pageOffset.dy, w: rect.w, h: rect.h }
+        : rect,
       frameId,
       table,
+      rowIndex: gridSlot?.rowIndex,
+      columnKey: gridSlot?.columnKey,
       siblingSlot: null,
       neighbors: {
         textLeft: resolved.textLeft,
@@ -287,6 +356,8 @@ export function extractFormGraph(opts: ExtractOptions): ExtractResult {
       disabled: (el as HTMLInputElement).disabled === true || el.getAttribute('aria-disabled') === 'true',
       existingValue: readValue(backing || el),
       routeHint: 'normal',
+      inPager: inPagerContainer(el),
+      inTableFooter: inTableFooter(el),
       locator: {
         selector: cssPath(el),
         backingSelector: backing ? cssPath(backing) : undefined,
@@ -299,21 +370,13 @@ export function extractFormGraph(opts: ExtractOptions): ExtractResult {
     collected.push(field);
   }
 
-  // 之后的一切（fields[] 顺序、region.fieldIds、标注截图徽标）都跟随阅读顺序
   const workingFields = sortByReadingOrder(collected);
   workingFields.forEach((f, i) => {
     f.controlNo = i + 1;
   });
 
-  buildSiblingSlots(workingFields);
+  buildSiblingSlots(workingFields, layout);
   collectFieldNeighbors(workingFields);
-
-  for (const f of workingFields) {
-    const region = workingRegions.find((r) => r.regionId === f.regionId);
-    const slot = f.siblingSlot && f.siblingSlot.count > 1 ? `[${f.siblingSlot.index + 1}/${f.siblingSlot.count}]` : '';
-    const lab = f.label || f.nearLabel || f.fieldId;
-    f.queryHint = [...(region?.chain ?? []), `${lab}${slot}`].filter(Boolean).join(' / ');
-  }
 
   const interactives: WorkingInteractive[] = [];
   const fieldsByRegion = new Map<string, WorkingField[]>();
@@ -325,12 +388,48 @@ export function extractFormGraph(opts: ExtractOptions): ExtractResult {
   const nextInteractiveId = makeInteractiveIdFactory();
 
   for (const region of workingRegions) {
-    if (!(region.containerEl instanceof HTMLTableElement)) continue;
-    const fieldsInTable = fieldsByRegion.get(region.regionId) ?? [];
-    const classification = classifyTable(region.containerEl, fieldsInTable);
+    const fieldsInRegion = fieldsByRegion.get(region.regionId) ?? [];
+    // 空重复表：保留 region，不因无字段跳过
+    if (!fieldsInRegion.length && region.kind !== 'repeat_group') continue;
+
+    const gridGroup = dominantGridGroup(fieldsInRegion, layout);
+    if (gridGroup) {
+      region.kind = 'repeat_group';
+      region.table = { rowRange: [0, gridGroup.rowCount - 1], columns: gridGroup.columns };
+      const addButton =
+        findAddButtonNear(gridGroup.unitEls[0].parentElement ?? region.containerEl) ||
+        findAddButtonNear(region.containerEl);
+      region.repeat = {
+        templateFieldIds: fieldsInRegion.filter((f) => f.rowIndex === 0).map((f) => f.fieldId),
+        rowCount: gridGroup.rowCount,
+        addTargetSelector: addButton ? cssPath(addButton) : undefined,
+        addTargetLabel: addButton ? norm(addButton.textContent) : undefined,
+      };
+      region.evidence.push('repeat-pattern');
+      if (addButton) {
+        interactives.push({
+          interactiveId: nextInteractiveId('addbtn', addButton),
+          kind: 'add-button',
+          label: region.repeat.addTargetLabel || '添加',
+          frameId,
+          rect: rectOf(addButton),
+          selector: cssPath(addButton),
+          relatedRegionId: region.regionId,
+          status: 'pending',
+          el: addButton,
+        });
+      }
+      continue;
+    }
+
+    if (!(region.containerEl instanceof HTMLTableElement) || region.split) continue;
+    if (!fieldsInRegion.length) continue;
+    const classification = classifyTable(region.containerEl, fieldsInRegion);
     region.kind = classification.kind;
-    const maxRow = fieldsInTable.reduce((m, f) => Math.max(m, f.table?.row ?? 0), 0);
-    region.table = { rowRange: [0, maxRow], columns: classification.columns };
+    if (classification.kind !== 'kv') {
+      const maxRow = fieldsInRegion.reduce((m, f) => Math.max(m, f.table?.row ?? 0), 0);
+      region.table = { rowRange: [0, maxRow], columns: classification.columns };
+    }
     if (classification.repeat) {
       region.repeat = classification.repeat;
       region.evidence.push('repeat-pattern');
@@ -354,21 +453,35 @@ export function extractFormGraph(opts: ExtractOptions): ExtractResult {
   interactives.push(...detectGateCandidates(workingFields, frameId, nextInteractiveId));
   interactives.push(...detectTabsAndAccordions(document, frameId, nextInteractiveId));
   const claimed = new Set(interactives.map((i) => i.el));
+  interactives.push(
+    ...detectAddButtons(
+      document,
+      frameId,
+      nextInteractiveId,
+      claimed,
+      workingRegions.map((r) => ({ regionId: r.regionId, containerEl: r.containerEl })),
+    ),
+  );
   interactives.push(...detectDialogTriggers(document, frameId, nextInteractiveId, claimed));
 
   const fields: FieldNode[] = workingFields.map(({ el: _el, ...rest }) => rest);
   const regions: RegionNode[] = workingRegions
-    .filter((r) => (fieldsByRegion.get(r.regionId) ?? []).length > 0)
+    .filter((r) => {
+      const n = (fieldsByRegion.get(r.regionId) ?? []).length;
+      return n > 0 || r.kind === 'repeat_group';
+    })
     .map((r) => {
-      const { containerEl, fieldEls: _fieldEls, ...rest } = r;
+      const { containerEl, fieldEls: _fieldEls, split, ...rest } = r;
+      const fieldsIn = fieldsByRegion.get(r.regionId) ?? [];
       return {
         ...rest,
-        rect: rectOf(containerEl),
+        rect: fieldsIn.length ? (split ? unionRect(fieldsIn.map((f) => f.rect)) : rectOf(containerEl)) : rectOf(containerEl),
         panelKey,
-        fieldIds: (fieldsByRegion.get(r.regionId) ?? []).map((f) => f.fieldId),
+        fieldIds: fieldsIn.map((f) => f.fieldId),
       };
     });
   const interactiveNodes: InteractiveNode[] = interactives.map(({ el: _el, ...rest }) => rest);
+  const texts = buildTextFacts(frameId, panelKey);
 
   const registry = new Map<string, Element>();
   for (const f of workingFields) registry.set(f.fieldId, f.el);
@@ -384,6 +497,7 @@ export function extractFormGraph(opts: ExtractOptions): ExtractResult {
     panels,
     regions,
     fields,
+    texts,
     interactives: interactiveNodes,
     unresolved,
     metrics,

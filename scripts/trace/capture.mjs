@@ -14,7 +14,8 @@
 import { chromium } from 'playwright';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { checkGraph } from './assert.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
@@ -24,6 +25,8 @@ const OUT_DIR = path.join(ROOT, 'output/trace');
 
 const args = process.argv.slice(2);
 const probeInteractives = args.includes('--probe');
+/** 外部 URL 没有质量下限可比，只跑通用不变量 */
+const expectations = JSON.parse(readFileSync(path.join(ROOT, 'fixtures/expectations.json'), 'utf8'));
 const urlArgIndex = args.indexOf('--url');
 const externalUrl = urlArgIndex >= 0 ? args[urlArgIndex + 1] : undefined;
 const only = args.find((a) => !a.startsWith('--') && a !== externalUrl);
@@ -39,6 +42,8 @@ if (!targets.length) {
   console.error('没有匹配的 fixture');
   process.exit(1);
 }
+
+const allFailures = [];
 
 const snapshot = (page) => page.evaluate(() => window.__snapfillTrace.snapshot(300));
 
@@ -98,6 +103,9 @@ for (const target of targets) {
   await page.screenshot({ path: path.join(dir, 'overlay.png'), fullPage: true });
   await page.evaluate(() => window.__snapfillTrace.clearOverlay());
 
+  const failures = checkGraph(target.name, graph, expectations);
+  if (failures.length) allFailures.push([target.name, failures]);
+
   console.log(`\n========== ${target.name} ==========`);
   for (const line of trace.summary) console.log(line);
   console.log(`产物: ${path.relative(ROOT, dir)}/{form_graph.json,controls.md,overlay.png} 标注控件=${drawn}`);
@@ -110,3 +118,17 @@ for (const target of targets) {
 }
 
 await browser.close();
+
+if (allFailures.length) {
+  console.error('\n========== 质量回归 ==========');
+  for (const [name, failures] of allFailures) {
+    console.error(`✗ ${name}`);
+    for (const f of failures) console.error(`    ${f}`);
+  }
+  console.error(
+    `\n${allFailures.length}/${targets.length} 个 fixture 未达标。` +
+      '若这是有意的产物变化，请同步更新 fixtures/expectations.json。',
+  );
+  process.exit(1);
+}
+console.log(`\n质量断言通过：${targets.length}/${targets.length} 个 fixture`);

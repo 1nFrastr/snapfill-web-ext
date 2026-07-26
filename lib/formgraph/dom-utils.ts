@@ -14,6 +14,33 @@ export function looksLikeHash(t: string): boolean {
   );
 }
 
+/** 分页器/表尾结构事实（不做丢弃，随控件上传）。 */
+const PAGER_SELECTOR =
+  '.datapager,.dataTables_paginate,.dataTables_length,.pagination,[class*="page-size"],[class*="pagesize"],[class*="pager"]';
+
+export function inPagerContainer(el: Element): boolean {
+  return Boolean(el.closest(PAGER_SELECTOR));
+}
+
+export function inTableFooter(el: Element): boolean {
+  return Boolean(el.closest('tfoot'));
+}
+
+/**
+ * 可填控件选择器：`type=hidden` 不算。
+ *
+ * 政务/OA 表单会在标签格里塞一串 `<input type="hidden">` 存字典码，
+ * 用 `input,select,textarea` 去判断「这一格是标签格还是数据格」会把标签格全判成数据格，
+ * 于是整列题干退化成几何近邻猜测。
+ */
+export const DATA_CONTROL_SELECTOR =
+  'input:not([type="hidden"]),select,textarea,[contenteditable="true"]';
+
+/** 元素内部有没有真正可填的控件（忽略隐藏域） */
+export function hasDataControl(el: Element): boolean {
+  return Boolean(el.querySelector(DATA_CONTROL_SELECTOR));
+}
+
 export function rectOf(el: Element): Rect {
   const r = el.getBoundingClientRect();
   return {
@@ -168,7 +195,25 @@ export function deepQueryAll(
   return out;
 }
 
-export type TextNode = { t: string; r: DOMRect; el: Element };
+export type TextNode = {
+  t: string;
+  r: DOMRect;
+  el: Element;
+  /**
+   * 最内层承载这段文本的元素（后代里再没有别的带文本元素）。
+   * 栅格布局里同一段文本会被外层容器重复计一遍，几何列头/标题行判定必须只看叶子，
+   * 否则「阶段 起止时间 研究内容」的父行会被当成一个宽文本块，压掉三个真列头。
+   */
+  leaf: boolean;
+};
+
+/** 元素的直接/间接子元素里还有别的文本承载者吗 */
+function hasTextBearingChild(node: Element): boolean {
+  for (const child of node.children) {
+    if (norm((child as HTMLElement).textContent)) return true;
+  }
+  return false;
+}
 
 export function collectTextNodes(root: ParentNode = document): TextNode[] {
   const out: TextNode[] = [];
@@ -179,12 +224,23 @@ export function collectTextNodes(root: ParentNode = document): TextNode[] {
   for (const node of nodes) {
     if (node.querySelector('input,select,textarea')) continue;
     const t = norm((node as HTMLElement).innerText || node.textContent);
-    if (!t || t.length < 2 || t.length > 80 || looksLikeHash(t)) continue;
+    if (!t) continue;
     const r = node.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) continue;
-    out.push({ t, r, el: node });
+    if (!isVisible(node)) continue;
+    out.push({ t, r, el: node, leaf: !hasTextBearingChild(node) });
   }
   return out;
+}
+
+/** 可见文本的排版事实（字号/字重），供事实层上传。 */
+export function readTextTypography(el: Element): { fontSize: number; fontWeight: number } {
+  if (!(el instanceof HTMLElement)) return { fontSize: 0, fontWeight: 400 };
+  const st = getComputedStyle(el);
+  return {
+    fontSize: Number.parseFloat(st.fontSize) || 0,
+    fontWeight: Number.parseInt(st.fontWeight, 10) || (st.fontWeight === 'bold' ? 700 : 400),
+  };
 }
 
 /**

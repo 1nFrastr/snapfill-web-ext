@@ -22,6 +22,12 @@ export type WorkingRegion = {
   frameId: number;
   fieldEls: Element[]; // 本区域内的字段元素（用于二次归属/重复块检测）
   containerEl: Element; // 区域容器元素，供 describeRegion 使用
+  /**
+   * 容器被内部标题行切成了多段，本区域只是其中一段。
+   * 此时 containerEl 覆盖的范围大于本区域，rect 得由字段并集算，
+   * 表格分类也不该再按整个容器来做（它是布局表，不是数据表）。
+   */
+  split: boolean;
   table?: { rowRange: [number, number]; columns: { key: string; label: string }[] };
   repeat?: RepeatInfo;
   gatedBy?: GatedBy;

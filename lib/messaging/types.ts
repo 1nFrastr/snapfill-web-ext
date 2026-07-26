@@ -11,6 +11,8 @@ export const MessageType = {
   ACTIVATE: 'SNAPFILL_ACTIVATE',
   OPEN_OPTIONS: 'SNAPFILL_OPEN_OPTIONS',
   WAIT_STABLE: 'SNAPFILL_WAIT_STABLE',
+  REVEAL_ALL: 'SNAPFILL_REVEAL_ALL',
+  SCROLL_PAGE: 'SNAPFILL_SCROLL_PAGE',
   VERIFY_APPLIED: 'SNAPFILL_VERIFY_APPLIED',
   RENDER_OVERLAY: 'SNAPFILL_RENDER_OVERLAY',
   CLEAR_OVERLAY: 'SNAPFILL_CLEAR_OVERLAY',
@@ -48,10 +50,15 @@ export type DescribeRegionRequest = {
 export type RegionFieldDetail = {
   fieldId: string;
   label: string;
+  /** 题干是怎么来的：Agent 靠它判断"这个题干可不可信"，几何来源（near-*）最需要复核 */
+  labelSource: string;
   control: string;
   required: boolean;
   readonly: boolean;
   existingValue: string | string[] | boolean | null;
+  /** 重复块里的行列坐标，缺失说明这个字段没被判进任何重复单元 */
+  rowIndex?: number;
+  columnKey?: string;
   rect: { x: number; y: number; w: number; h: number };
 };
 
@@ -125,6 +132,40 @@ export type WaitStableRequest = {
 
 export type WaitStableResponse =
   | { ok: true; waitedMs: number; mutationCount: number }
+  | { ok: false; error: string };
+
+export type RevealAllRequest = {
+  type: typeof MessageType.REVEAL_ALL;
+};
+
+export type RevealAllResponse =
+  | {
+      ok: true;
+      /** 滚动前后的可填控件数：增长说明页面是懒渲染的，必须重新 snapshotForm */
+      controlsBefore: number;
+      controlsAfter: number;
+      scrolledContainers: number;
+    }
+  | { ok: false; error: string };
+
+export type ScrollPageRequest = {
+  type: typeof MessageType.SCROLL_PAGE;
+  /** 目标滚动位置（该 frame 的页面坐标）；省略则只回报指标、不滚动 */
+  y?: number;
+};
+
+export type ScrollPageResponse =
+  | {
+      ok: true;
+      /** 实际到达的滚动位置：到底部时会小于请求值，拼图必须按这个值排布 */
+      scrollY: number;
+      contentHeight: number;
+      viewportHeight: number;
+      viewportWidth: number;
+      devicePixelRatio: number;
+      /** 内容所在 frame 自己有滚动条（否则是祖先文档在滚） */
+      selfScrolls: boolean;
+    }
   | { ok: false; error: string };
 
 export type VerifyAppliedRequest = {
@@ -204,6 +245,8 @@ export type ExtensionRequest =
   | ActivateRequest
   | OpenOptionsRequest
   | WaitStableRequest
+  | RevealAllRequest
+  | ScrollPageRequest
   | VerifyAppliedRequest
   | RenderOverlayRequest
   | ClearOverlayRequest;
@@ -216,6 +259,8 @@ export type ExtensionResponse =
   | ActivateResponse
   | OpenOptionsResponse
   | WaitStableResponse
+  | RevealAllResponse
+  | ScrollPageResponse
   | VerifyAppliedResponse
   | RenderOverlayResponse
   | ClearOverlayResponse;

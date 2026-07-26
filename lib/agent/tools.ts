@@ -1,8 +1,8 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import { fillFormFields } from '@/lib/api/client';
+import { fillFormRegions } from '@/lib/api/client';
 import type { FormFieldValue } from '@/lib/api/types';
-import { buildPageContext, formGraphToApiFields, type FieldLocator } from '@/lib/fill/map-fields';
+import { buildFieldLocators, buildPageContext, formGraphToFactPayload, type FieldLocator } from '@/lib/fill/map-fields';
 import { MessageType } from '@/lib/messaging/types';
 import { sendToFrame, ensureContentScripts } from '@/lib/messaging/send';
 import type {
@@ -13,6 +13,7 @@ import type {
   ReadElementDetailResponse,
   SnapshotFormResponse,
   VerifyAppliedResponse,
+  RevealAllResponse,
   WaitStableResponse,
 } from '@/lib/messaging/types';
 import { emptyFormGraph, diffFragments, mergeFragmentIntoGraph, tagGatedRegions } from '@/lib/formgraph/merge';
@@ -174,7 +175,7 @@ export function createSnapfillTools(ctx: AgentToolContext) {
       inputSchema: z.object({
         frameId: z.number().int().optional().describe('目标 frame；省略则自动选可见控件最多的'),
         note: z.string().optional().describe('步骤/页签备注，写入 page_context'),
-        maxFields: z.number().int().min(1).max(300).optional(),
+        maxFields: z.number().int().min(1).max(1000).optional(),
       }),
       execute: async ({ frameId, note, maxFields }) => {
         let targetId = frameId;
@@ -190,7 +191,7 @@ export function createSnapfillTools(ctx: AgentToolContext) {
 
         const res = await sendToFrame<SnapshotFormResponse>(ctx.tabId, targetId, {
           type: MessageType.SNAPSHOT_FORM,
-          maxFields: maxFields ?? 200,
+          maxFields: maxFields ?? 500,
         });
 
         if (!res?.ok) {
@@ -211,6 +212,7 @@ export function createSnapfillTools(ctx: AgentToolContext) {
         }
         for (const r of fragment.regions) r.frameId = targetId;
         for (const it of fragment.interactives) it.frameId = targetId;
+        for (const t of fragment.texts ?? []) t.frameId = targetId;
 
         // DOM 认不出激活态（自定义 tab 组件）时，用代码记录的上一次激活目标兜底归属，
         // 否则所有面板会挤进同一个 panelKey='' 分片，互相覆盖。
@@ -220,6 +222,7 @@ export function createSnapfillTools(ctx: AgentToolContext) {
             fragment.panel = hit;
             for (const f of fragment.fields) f.panelKey = hit.key;
             for (const r of fragment.regions) r.panelKey = hit.key;
+            for (const t of fragment.texts ?? []) t.panelKey = hit.key;
           }
         }
 
@@ -245,7 +248,7 @@ export function createSnapfillTools(ctx: AgentToolContext) {
           frameMeta,
           activatedIds: ctx.activatedIds,
         });
-        ctx.locators = formGraphToApiFields(ctx.formGraph.fields).locators;
+        ctx.locators = buildFieldLocators(ctx.formGraph.fields).locators;
         const panelLabel = tagged.panel?.label ?? '';
         ctx.lastPageContext =
           (note?.trim() ? `${note.trim()} · ` : '') +
@@ -294,6 +297,37 @@ export function createSnapfillTools(ctx: AgentToolContext) {
           panelsPending: pendingPanels.map((p) => ({ key: p.key, label: p.label })),
           totalFieldsAcrossFrames: ctx.formGraph.fields.length,
           tip: buildSnapshotTip(pendingPanels, ctx.formGraph.interactives.filter((i) => i.frameId === targetId)),
+        };
+      },
+    }),
+
+    revealAll: tool({
+      description:
+        '【感知】滚过整页与页面内部的滚动容器，触发懒加载/虚拟滚动的延迟渲染，然后恢复原来的滚动位置。' +
+        '返回滚动前后的可填控件数。controlsAfter > controlsBefore 说明这一页是懒渲染的，必须再 snapshotForm 一次才算抽全。' +
+        '适用场景：长表单只抽到开头一部分、字段数明显少于页面观感、或列表类区域只有一两行。',
+      inputSchema: z.object({
+        frameId: z.number().optional().describe('省略则用上次 snapshotForm 的 frame'),
+      }),
+      execute: async ({ frameId }) => {
+        let target = frameId;
+        if (target == null) {
+          const frames = ctx.lastFrames ?? (await probeAllFrames(ctx.tabId));
+          ctx.lastFrames = frames;
+          target = pickBestFrame(frames)?.frameId;
+          if (target == null) return { ok: false as const, error: '无法探测到任何 frame' };
+        }
+        const res = await sendToFrame<RevealAllResponse>(ctx.tabId, target, {
+          type: MessageType.REVEAL_ALL,
+        });
+        if (!res.ok) return res;
+        const grew = res.controlsAfter > res.controlsBefore;
+        slog('agent', `revealAll frame=${target} ${res.controlsBefore}→${res.controlsAfter}`);
+        return {
+          ...res,
+          tip: grew
+            ? `滚动后多出 ${res.controlsAfter - res.controlsBefore} 个控件，请对 frameId=${target} 重新 snapshotForm`
+            : '控件数没变化，页面不是懒渲染的，不必重复调用',
         };
       },
     }),
@@ -426,26 +460,26 @@ export function createSnapfillTools(ctx: AgentToolContext) {
 
     commitFormGraph: tool({
       description:
-        '【提交】把当前累积 FormGraph 交给后端做检索与填值。字段清单由系统从 FormGraph 确定性生成（含区域链、options、只读/必填），你不需要也不能自己重建字段数组；' +
-        '知识库由侧栏勾选注入。返回的是填值结果摘要，具体值直接由 applyValues 写回，不经过你转述。',
+        '【提交】把当前累积 FormGraph 的事实层（controls + texts + structure）交给后端做题干关联、检索与填值。' +
+        '字段清单由系统确定性生成，你不需要也不能自己重建；知识库由侧栏勾选注入。返回填值摘要，具体值由 applyValues 写回。',
       inputSchema: z.object({
-        regionIds: z.array(z.string()).optional().describe('只提交指定区域；省略则提交全部已抽取字段'),
+        regionIds: z.array(z.string()).optional().describe('只提交指定区域；省略则提交全部'),
         profile_id: z.string().nullable().optional(),
       }),
       execute: async ({ regionIds, profile_id }) => {
-        const scoped = regionIds?.length
-          ? ctx.formGraph.fields.filter((f) => regionIds.includes(f.regionId))
-          : ctx.formGraph.fields;
-        const { fields, locators, excluded } = formGraphToApiFields(scoped);
-        if (!fields.length) {
+        const { payload, locators, excluded } = formGraphToFactPayload(ctx.formGraph, {
+          regionIds,
+          pageContext: ctx.lastPageContext || undefined,
+        });
+        if (!payload.controls.length && !payload.structure.regions.some((r) => r.kind === 'repeat_group')) {
           throw new Error('没有可提交的字段，请先 snapshotForm');
         }
-        ctx.locators = formGraphToApiFields(ctx.formGraph.fields).locators;
+        ctx.locators = buildFieldLocators(ctx.formGraph.fields).locators;
 
-        const data = await fillFormFields({
-          fields,
+        const data = await fillFormRegions({
+          ...payload,
           knowledge_file_ids: ctx.preferredKnowledgeIds,
-          page_context: ctx.lastPageContext || null,
+          page_context: ctx.lastPageContext || payload.page_context || null,
           profile_id: profile_id ?? null,
         });
 
@@ -453,12 +487,17 @@ export function createSnapfillTools(ctx: AgentToolContext) {
         const controlKey = makeControlKey(ctx.formGraph);
         const labelOf = new Map(ctx.formGraph.fields.map((f) => [f.fieldId, controlKey(f)]));
         const filled = Object.entries(data.values).filter(([, v]) => Boolean(v.value?.trim()));
-        slog('agent', `commitFormGraph task=${data.task_id} submitted=${fields.length} filled=${filled.length}`);
+        slog(
+          'agent',
+          `commitFormGraph task=${data.task_id} controls=${payload.controls.length} texts=${payload.texts.length} filled=${filled.length}`,
+        );
 
         return {
           ok: true as const,
           task_id: data.task_id,
-          submittedCount: fields.length,
+          submittedCount: payload.controls.length,
+          textCount: payload.texts.length,
+          regionCount: payload.structure.regions.length,
           filledCount: filled.length,
           unfilledCount: data.unfilled.length,
           skippedByRoute: excluded.map((f) => ({ control: controlKey(f), label: f.label, route: f.routeHint })),

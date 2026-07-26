@@ -4,8 +4,9 @@ import {
   type AgentStreamEvent,
 } from '@/lib/messaging/types';
 import { streamSnapfillAgent } from '@/lib/agent/snapfill-agent';
+import { seedDevToken } from '@/lib/api/client';
 import { ensureSettingsLoaded } from '@/lib/settings/store';
-import { elapsed, serror, slog } from '@/lib/log';
+import { elapsed, serror, slog, swarn } from '@/lib/log';
 
 async function getActiveTabId(explicit?: number): Promise<number> {
   if (explicit != null) return explicit;
@@ -42,6 +43,8 @@ function post(
 export default defineBackground(() => {
   slog('bg', 'background 已启动。流式 ToolLoopAgent 经 Port 推送到侧栏。');
   void ensureSettingsLoaded();
+  // 本地联调便利：.env.local 配了 WXT_API_DEV_TOKEN 就免去每次重装后手动登录
+  void seedDevToken().catch((error) => swarn('bg', 'dev token 播种失败', error));
 
   browser.sidePanel
     .setPanelBehavior({ openPanelOnActionClick: true })

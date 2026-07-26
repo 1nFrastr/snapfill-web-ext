@@ -1,61 +1,20 @@
 /**
- * Region 容器划分：fieldset/legend → table → heading 层级 → 几何间距兜底。
- * 结构优先：只在没有任何语义容器时才退化到几何聚类。
- *
- * 本模块只产出「容器级」WorkingRegion（kind 先给占位值，table 的精确分类
- * 需要等字段解析完成后由 repeat.ts 的 classifyTable 二次修正，见 extract.ts）。
+ * Region 容器划分：只认 DOM 结构容器（table / fieldset / dialog / .datatable）。
+ * 章节语义分节与命名留给后端在完整 texts 层处理。
  */
 
 import { norm, rectOf } from '@/lib/formgraph/dom-utils';
 import type { WorkingRegion } from '@/lib/formgraph/internal-types';
 import { cssPath } from '@/lib/formgraph/dom-utils';
-
-// 真正意义上的"标题文本"元素：只匹配真实标题节点，不匹配整段容器
-// （[data-section] 容器可能内含表格/大段文本，绝不能当作标题整体取 textContent）
-const HEADING_SELECTOR = 'h1,h2,h3,h4,h5,h6,legend,.section-title,.card-title,.ant-card-head-title';
-
-type HeadingCandidate = { el: Element; text: string };
-
-function isHeadingLike(el: Element): boolean {
-  return el.matches(HEADING_SELECTOR);
-}
+import { findEmptyDataTables, emptyTableDisplayName } from '@/lib/formgraph/repeat';
 
 /**
- * 只认"直接就是标题元素"的前置兄弟，不深入兄弟容器内部找标题——
- * 否则一串平级 fieldset（申报头信息/货物明细/税费信息…）会被误判成互相嵌套，
- * 把前一个平级 section 的标题也塞进后一个 section 的 chain 里。
+ * 曾经这里有个"向上向前搜索最近 heading"的链（collectHeadingChain）。它已删除：
+ * "最近的前置标题元素"本质是顺序猜测，政务页面把页面大标题、字数上限提示（`200`）、
+ * 已上传附件名都写成了标题类元素，猜出来的链会一路进 chain → 进 query 前缀，
+ * 一处猜错污染整块检索。章节归属改由后端用 texts 层的排版规格 + y 坐标判定，
+ * 那里有全页文本可比，比前端局部搜索准。
  */
-function nearestPrecedingHeading(el: Element): HeadingCandidate | null {
-  let cur: Element | null = el;
-  while (cur) {
-    let sib: Element | null = cur.previousElementSibling;
-    while (sib) {
-      if (isHeadingLike(sib)) return { el: sib, text: norm(sib.textContent) };
-      sib = sib.previousElementSibling;
-    }
-    cur = cur.parentElement;
-  }
-  return null;
-}
-
-function collectHeadingChain(container: Element, maxLevels = 3): string[] {
-  const chain: string[] = [];
-  const seen = new Set<string>();
-  let cur: Element | null = container;
-  let guard = 0;
-  while (cur && chain.length < maxLevels && guard < 20) {
-    guard += 1;
-    const heading = nearestPrecedingHeading(cur);
-    if (!heading) break;
-    const text = heading.text.length > 60 ? heading.text.slice(0, 60) : heading.text;
-    if (text && !seen.has(text)) {
-      chain.unshift(text);
-      seen.add(text);
-    }
-    cur = heading.el.parentElement;
-  }
-  return chain;
-}
 
 export type SectionBuildResult = {
   regions: WorkingRegion[];
@@ -65,13 +24,14 @@ export type SectionBuildResult = {
 const GEOMETRY_GAP_PX = 56;
 
 /**
- * regionId 必须跨快照稳定（同一容器再抽一次要拿到同一个 id），否则 diff/gatedBy
- * 打标会把"没变化的旧区域"也误判成"新增"。用容器的 cssPath 派生，而非自增计数器。
+ * regionId 必须带 (frame, 面板) 作用域，与 controlNo 的 `f{frame}-p{面板}-` 前缀同源。
+ * tab 表单里同一张 DOM 表会在每个面板各抽一次，若 id 不带作用域，三个面板产出同一个
+ * regionId，下游按 id 分桶就会把不同面板的字段塌进一桶、区域名被后写入者覆盖。
  */
-function makeRegionIdFactory() {
+function makeRegionIdFactory(scope: string) {
   const used = new Set<string>();
   return (containerEl: Element, evidence: string): string => {
-    const base = `region_${evidence}_${cssPath(containerEl)}`.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 150);
+    const base = `region_${scope}_${evidence}_${cssPath(containerEl)}`.replace(/[^a-zA-Z0-9_]/g, '_');
     let id = base;
     let n = 2;
     while (used.has(id)) {
@@ -83,70 +43,112 @@ function makeRegionIdFactory() {
   };
 }
 
-export function buildRegions(controlEls: Element[], frameId: number): SectionBuildResult {
+/**
+ * 区域名只取 HTML 明确声明"这个容器叫什么"的槽位：fieldset 的 legend、显式
+ * data-section、组件库的对话框标题。取不到就留空——空名是"前端没有命名事实"
+ * 这一事实本身，后端会用 texts 层的排版规格按 y 区间归属章节。
+ *
+ * 不用泛化的 `querySelector('h1..h6')`：容器内任意深度的第一个标题元素可能是
+ * 页面大标题恰好嵌在这张表里，那不是这个区域的名字。
+ */
+function containerName(containerEl: Element): string {
+  const legend = containerEl.querySelector(':scope > legend');
+  const dialogTitle = containerEl.querySelector(
+    ':scope > .ant-modal-title, :scope > .el-dialog__title, :scope > header > .ant-modal-title, :scope > .ant-modal-header > .ant-modal-title, :scope > .el-dialog__header > .el-dialog__title',
+  );
+  return (
+    norm(legend?.textContent) ||
+    norm(containerEl.getAttribute('data-section')) ||
+    norm(dialogTitle?.textContent) ||
+    ''
+  );
+}
+
+function containerOf(el: Element): { containerEl: Element; evidence: WorkingRegion['evidence'][number] } | null {
+  const datatable = el.closest('.datatable, [class*="datatable"]');
+  if (datatable) return { containerEl: datatable, evidence: 'table' };
+  const table = el.closest('table');
+  if (table) return { containerEl: table, evidence: 'table' };
+  const fieldset = el.closest('fieldset');
+  if (fieldset) return { containerEl: fieldset, evidence: 'fieldset' };
+  const dialog = el.closest('dialog,[role="dialog"]');
+  if (dialog) return { containerEl: dialog, evidence: 'dialog' };
+  return null;
+}
+
+export function buildRegions(
+  controlEls: Element[],
+  frameId: number,
+  panelKey = '',
+): SectionBuildResult {
   const regions: WorkingRegion[] = [];
   const elementToRegion = new Map<Element, WorkingRegion>();
   const regionByContainer = new Map<Element, WorkingRegion>();
-  const nextRegionId = makeRegionIdFactory();
-
+  const nextRegionId = makeRegionIdFactory(`f${frameId}${panelKey ? `_p_${panelKey}` : ''}`);
   const remaining: Element[] = [];
 
   for (const el of controlEls) {
-    const table = el.closest('table');
-    const fieldset = el.closest('fieldset');
-
-    let containerEl: Element | null = null;
-    let evidence: WorkingRegion['evidence'][number] = 'geometry-gap';
-
-    if (table) {
-      containerEl = table;
-      evidence = 'table';
-    } else if (fieldset) {
-      containerEl = fieldset;
-      evidence = 'fieldset';
-    } else {
-      const dialog = el.closest('dialog,[role="dialog"]');
-      if (dialog) {
-        containerEl = dialog;
-        evidence = 'dialog';
-      }
-    }
-
-    if (containerEl) {
-      let region = regionByContainer.get(containerEl);
-      if (!region) {
-        const chain = collectHeadingChain(containerEl);
-        const legend = containerEl.querySelector(':scope > legend');
-        // dialog/section 这类容器的标题通常是内部第一个 heading（弹窗子表单尤其常见）
-        const innerHeading = containerEl.querySelector('h1,h2,h3,h4,h5,h6,.section-title,.ant-modal-title,.el-dialog__title');
-        const name =
-          norm(legend?.textContent) ||
-          norm(containerEl.getAttribute('data-section')) ||
-          norm(innerHeading?.textContent) ||
-          chain[chain.length - 1] ||
-          (evidence === 'table' ? '表格区域' : '未命名区域');
-        region = {
-          regionId: nextRegionId(containerEl, evidence),
-          kind: 'kv',
-          name,
-          chain: chain.length ? chain : [name],
-          frameId,
-          fieldEls: [],
-          containerEl,
-          confidence: 'high',
-          evidence: [evidence],
-        };
-        regions.push(region);
-        regionByContainer.set(containerEl, region);
-      }
-      region.fieldEls.push(el);
-      elementToRegion.set(el, region);
-    } else {
+    const found = containerOf(el);
+    if (!found) {
       remaining.push(el);
+      continue;
     }
+    let region = regionByContainer.get(found.containerEl);
+    if (!region) {
+      const name = containerName(found.containerEl);
+      region = {
+        regionId: nextRegionId(found.containerEl, found.evidence),
+        kind: 'kv',
+        name,
+        chain: name ? [name] : [],
+        frameId,
+        fieldEls: [],
+        containerEl: found.containerEl,
+        split: false,
+        confidence: 'high',
+        evidence: [found.evidence],
+      };
+      regions.push(region);
+      regionByContainer.set(found.containerEl, region);
+    }
+    region.fieldEls.push(el);
+    elementToRegion.set(el, region);
   }
 
-  // 几何兜底：无语义容器时按阅读顺序 + 纵向间距切分
+  // 空重复表：有列头无数据行，即使 0 控件也建 region，供 Agent 看见并激活增行
+  for (const empty of findEmptyDataTables(document)) {
+    if (regionByContainer.has(empty.containerEl)) {
+      const existing = regionByContainer.get(empty.containerEl)!;
+      existing.kind = 'repeat_group';
+      existing.table = { rowRange: [0, -1], columns: empty.columns };
+      existing.repeat = { templateFieldIds: [], rowCount: 0 };
+      if (!existing.evidence.includes('repeat-pattern')) existing.evidence.push('repeat-pattern');
+      if (!existing.name) {
+        const named = emptyTableDisplayName(empty.columns);
+        existing.name = named;
+        if (!existing.chain.includes(named)) existing.chain = [...existing.chain, named];
+      }
+      continue;
+    }
+    const name = emptyTableDisplayName(empty.columns);
+    const region: WorkingRegion = {
+      regionId: nextRegionId(empty.containerEl, 'empty_table'),
+      kind: 'repeat_group',
+      name,
+      chain: [name],
+      frameId,
+      fieldEls: [],
+      containerEl: empty.containerEl,
+      split: false,
+      confidence: 'high',
+      evidence: ['table', 'repeat-pattern'],
+      table: { rowRange: [0, -1], columns: empty.columns },
+      repeat: { templateFieldIds: [], rowCount: 0 },
+    };
+    regions.push(region);
+    regionByContainer.set(empty.containerEl, region);
+  }
+
   if (remaining.length) {
     const withRect = remaining
       .map((el) => ({ el, r: rectOf(el) }))
@@ -154,32 +156,26 @@ export function buildRegions(controlEls: Element[], frameId: number): SectionBui
 
     let current: WorkingRegion | null = null;
     let lastBottom = -Infinity;
-    let lastHeadingText = '';
 
     for (const { el, r } of withRect) {
-      const heading = nearestPrecedingHeading(el);
-      const headingText = heading ? heading.text : '';
       const gap = r.y - lastBottom;
-      const headingChanged = headingText && headingText !== lastHeadingText;
 
-      if (!current || gap > GEOMETRY_GAP_PX || headingChanged) {
-        const chain = collectHeadingChain(el);
-        const name = chain[chain.length - 1] || `区域 ${regions.length + 1}`;
+      // 没有结构容器可依，只能按纵向空隙断段；命名与章节归属交给后端
+      if (!current || gap > GEOMETRY_GAP_PX) {
         const containerEl = el.parentElement || el;
-        const evidence = headingChanged ? 'heading' : 'geometry-gap';
         current = {
-          regionId: nextRegionId(containerEl, evidence),
+          regionId: nextRegionId(containerEl, 'geometry-gap'),
           kind: 'kv',
-          name,
-          chain: chain.length ? chain : [name],
+          name: '',
+          chain: [],
           frameId,
           fieldEls: [],
           containerEl,
-          confidence: headingChanged ? 'high' : 'medium',
-          evidence: [evidence],
+          split: false,
+          confidence: 'medium',
+          evidence: ['geometry-gap'],
         };
         regions.push(current);
-        lastHeadingText = headingText || lastHeadingText;
       }
 
       current.fieldEls.push(el);

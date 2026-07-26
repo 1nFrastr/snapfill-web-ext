@@ -31,6 +31,7 @@ export function emptyFormGraph(source: FormGraphSource): FormGraph {
     panels: [],
     regions: [],
     fields: [],
+    texts: [],
     interactives: [],
     unresolved: [],
     metrics: computeMetrics(0, [], [], [], []),
@@ -103,6 +104,10 @@ export function mergeFragmentIntoGraph(
     panels,
     regions: [...keepOtherScope(graph.regions), ...fragment.regions],
     fields: [...keepOtherScope(graph.fields), ...fragment.fields],
+    texts: [
+      ...graph.texts.filter((t) => t.frameId !== fragment.frameId || t.panelKey !== panelKey),
+      ...fragment.texts,
+    ],
     interactives: applyInteractiveStatus([...interactives.values()], panels, activatedIds),
     unresolved: [...unresolved.values()],
   };

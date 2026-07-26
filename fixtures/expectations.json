@@ -1,0 +1,50 @@
+{
+  "_comment": "事实层质量下限。labeledRate 与区域名不再作门槛（命名归后端）；重复块按必含列名定位。",
+
+  "customs-declaration": {
+    "minCoverage": 0.9,
+    "minRegions": 4,
+    "minTexts": 10,
+    "repeatGroups": [{ "columnsInclude": ["商品名称", "数量", "单价"], "rowCount": 2, "columns": 8 }]
+  },
+  "enterprise-filing": {
+    "minCoverage": 0.78,
+    "minRegions": 3,
+    "minTexts": 10
+  },
+  "gov-grid-application": {
+    "minCoverage": 0.9,
+    "minRegions": 3,
+    "minTexts": 40,
+    "minEmptyRepeatTables": 2,
+    "requireAddButton": true,
+    "chapterTexts": ["三、项目组成员", "四、合作单位", "五、项目实施的背景和意义", "六、发展趋势", "十一、计划进度"]
+  },
+  "gov_project": {
+    "minCoverage": 0.83,
+    "minRegions": 1,
+    "minTexts": 5
+  },
+  "personnel-roster": {
+    "minCoverage": 0.8,
+    "minRegions": 3,
+    "minTexts": 10,
+    "repeatGroups": [{ "columnsInclude": ["姓名", "证件号码", "岗位"], "columns": 5 }]
+  },
+  "trade-tax-form": {
+    "minCoverage": 0.9,
+    "minRegions": 4,
+    "minTexts": 10,
+    "repeatGroups": [{ "columnsInclude": ["税种", "税目", "应纳税额"], "rowCount": 2, "columns": 5 }]
+  },
+  "visa-application": {
+    "minCoverage": 0.8,
+    "minRegions": 4,
+    "minTexts": 10
+  },
+  "visa_customs": {
+    "minCoverage": 0.9,
+    "minRegions": 1,
+    "minTexts": 5
+  }
+}

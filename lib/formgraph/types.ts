@@ -33,15 +33,21 @@ export type LabelSource =
   | 'aria'
   /** radio/checkbox 组被去重成单字段后，取到的"组问题"（如"是否含境外人员"） */
   | 'group-question'
-  | 'near-left'
-  | 'near-right'
-  | 'near-above'
-  | 'table-left-cell'
   | 'table-header'
   | 'placeholder'
-  | 'name'
-  | 'id'
   | 'empty';
+
+export type TextFact = {
+  text: string;
+  rect: Rect;
+  frameId: number;
+  panelKey: string;
+  domPath: string;
+  fontSize: number;
+  fontWeight: number;
+  tablePos?: { tableIndex: number; row: number; col: number };
+  leaf: boolean;
+};
 
 export type RouteHint =
   | 'normal'
@@ -109,6 +115,11 @@ export type TableMeta = {
   colspan: number;
   rowspan: number;
   controlsInCell: number;
+  /**
+   * 格内控件跨了几个视觉行。>1 说明这个 td 是布局容器而不是数据格——
+   * 左邻格/表头描述的是外层大表的行列，与格内控件无关。
+   */
+  rowsInCell: number;
 };
 
 export type SiblingSlot = {
@@ -153,8 +164,8 @@ export type FieldNode = {
   label: string;
   labelSource: LabelSource;
   labelConfidence: 'high' | 'medium' | 'low';
+  /** 本地核对提示（最近文本），不上传后端 */
   nearLabel: string;
-  queryHint: string;
 
   rect: Rect;
   pageRect: Rect;
@@ -173,6 +184,9 @@ export type FieldNode = {
   disabled: boolean;
   existingValue: string | string[] | boolean | null;
   routeHint: RouteHint;
+  /** 结构事实：位于分页器或表尾 */
+  inPager: boolean;
+  inTableFooter: boolean;
 
   /** 本地定位信息；不上传后端 */
   locator: {
@@ -290,6 +304,8 @@ export type FormGraphFragment = {
   panels: PanelRef[];
   regions: RegionNode[];
   fields: FieldNode[];
+  /** 本 frame 全部可见文本叶子（事实层，供后端语义关联） */
+  texts: TextFact[];
   interactives: InteractiveNode[];
   unresolved: UnresolvedItem[];
   metrics: ExtractionMetrics;
@@ -302,6 +318,7 @@ export type FormGraph = {
   panels: PanelNode[];
   regions: RegionNode[];
   fields: FieldNode[];
+  texts: TextFact[];
   interactives: InteractiveNode[];
   unresolved: UnresolvedItem[];
   metrics: ExtractionMetrics;
